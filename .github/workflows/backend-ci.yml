@@ -1,0 +1,70 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_USER: nimbus
+          POSTGRES_PASSWORD: nimbus_ci
+          POSTGRES_DB: nimbus_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U nimbus -d nimbus_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      TEST_DATABASE_URL: postgresql://nimbus_app:nimbus_app_ci@localhost:5433/nimbus_test
+      TEST_MIGRATION_DATABASE_URL: postgresql://nimbus:nimbus_ci@localhost:5433/nimbus_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint:check
+
+      - run: npm run format:check
+
+      - run: npm test
+
+      # Same role the local docker init script creates: non-owner, no BYPASSRLS.
+      - name: Create app database role
+        run: >
+          psql postgresql://nimbus:nimbus_ci@localhost:5433/nimbus_test -v ON_ERROR_STOP=1
+          -c "CREATE ROLE nimbus_app LOGIN PASSWORD 'nimbus_app_ci' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;"
+
+      - name: RLS isolation suite
+        run: npm run test:e2e
