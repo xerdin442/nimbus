@@ -33,7 +33,7 @@ module.exports = {
   },
   moduleNameMapper: {
     '^@src/(.*)$': '<rootDir>/src/$1',
-    '^(.+)\\.js$': '$1',
+    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   resetMocks: true,
 };

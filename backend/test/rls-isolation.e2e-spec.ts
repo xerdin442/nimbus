@@ -42,9 +42,7 @@ describe('RLS isolation (e2e)', () => {
     const owner = drizzle(ownerPool);
 
     await migrate(owner, { migrationsFolder: 'drizzle' });
-    await owner.execute(
-      sql`truncate table webhook_endpoints, locations, organizations cascade`,
-    );
+    await owner.execute(sql`truncate table organizations, users cascade`);
 
     const [a, b] = await owner
       .insert(organizations)
@@ -268,13 +266,36 @@ describe('RLS isolation (e2e)', () => {
   });
 
   describe('schema guardrail', () => {
-    it('every table with organization_id has RLS enabled, forced, and a policy', async () => {
+    /**
+     * Tables that deliberately have no RLS: read by auth code and guards before a tenant context
+     * exists. Adding a table here is a reviewed decision; forgetting RLS on a new table fails below.
+     */
+    const GLOBAL_TABLES = ['memberships', 'invitations', 'api_keys'];
+
+    it('global tables are exactly the allowlisted ones', async () => {
+      const result = await ownerPool.query<{ table_name: string }>(`
+        select c.relname as table_name
+        from information_schema.columns col
+        join pg_class c on c.relname = col.table_name
+        join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+        where col.table_schema = 'public' and col.column_name = 'organization_id'
+          and c.relkind = 'r' and not c.relrowsecurity
+        order by 1
+      `);
+
+      expect(result.rows.map((r) => r.table_name)).toEqual(
+        [...GLOBAL_TABLES].sort(),
+      );
+    });
+
+    it('every other table with organization_id has RLS enabled, forced, and a policy', async () => {
       const result = await ownerPool.query<{
         table_name: string;
         rls: boolean;
         forced: boolean;
         policies: number;
-      }>(`
+      }>(
+        `
         select c.relname as table_name,
                c.relrowsecurity as rls,
                c.relforcerowsecurity as forced,
@@ -284,8 +305,10 @@ describe('RLS isolation (e2e)', () => {
         join pg_class c on c.relname = col.table_name
         join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
         where col.table_schema = 'public' and col.column_name = 'organization_id'
-          and c.relkind = 'r'
-      `);
+          and c.relkind = 'r' and c.relname <> all($1::text[])
+      `,
+        [GLOBAL_TABLES],
+      );
 
       expect(result.rows.length).toBeGreaterThan(0);
       for (const table of result.rows) {
@@ -302,7 +325,8 @@ describe('RLS isolation (e2e)', () => {
       const result = await ownerPool.query<{
         table_name: string;
         checks_mode: boolean;
-      }>(`
+      }>(
+        `
         select col.table_name,
                exists (
                  select 1 from pg_policies p
@@ -312,7 +336,10 @@ describe('RLS isolation (e2e)', () => {
                ) as checks_mode
         from information_schema.columns col
         where col.table_schema = 'public' and col.column_name = 'livemode'
-      `);
+          and col.table_name <> all($1::text[])
+      `,
+        [GLOBAL_TABLES],
+      );
 
       expect(result.rows.length).toBeGreaterThan(0);
       for (const table of result.rows) {

@@ -4,13 +4,17 @@
   "rootDir": "..",
   "roots": ["<rootDir>/test"],
   "testMatch": ["**/*.e2e-spec.ts"],
+  "testTimeout": 30000,
   "moduleFileExtensions": ["ts", "js", "json"],
-  "setupFiles": ["dotenv/config"],
+  "setupFiles": ["<rootDir>/test/setup-env.ts"],
   "transform": {
-    "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.json" }]
+    "^.+\\.ts$": [
+      "ts-jest",
+      { "tsconfig": "tsconfig.json", "diagnostics": false }
+    ]
   },
   "moduleNameMapper": {
     "^@src/(.*)$": "<rootDir>/src/$1",
-    "^(.+)\\.js$": "$1"
+    "^(\\.{1,2}/.*)\\.js$": "$1"
   }
 }
