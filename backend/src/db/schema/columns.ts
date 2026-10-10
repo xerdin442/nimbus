@@ -2,10 +2,11 @@ import { boolean, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const id = () => uuid('id').primaryKey().defaultRandom();
 
+export const createdAt = () =>
+  timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
+
 export const timestamps = {
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: createdAt(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow()

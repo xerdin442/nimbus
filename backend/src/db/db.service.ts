@@ -4,14 +4,11 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
-import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, PoolConfig } from 'pg';
 import { isUUID } from 'class-validator';
 import * as schema from './schema';
-import type { TenantContext } from '@src/common/types';
-
-export type Database = NodePgDatabase<typeof schema>;
-export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+import type { Database, TenantContext, Transaction } from '@src/common/types';
 
 @Injectable()
 export class DbService implements OnModuleDestroy {
