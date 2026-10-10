@@ -14,15 +14,18 @@ export const randomAlphanumeric = (length: number): string => {
   return result;
 };
 
+export const THROTTLER_SECONDS = 'Seconds';
+export const THROTTLER_MINUTES = 'Minutes';
+
 export const applyThrottlerConfig = (): ThrottlerModuleOptions => {
   const throttles: ThrottlerOptions[] = [
     {
-      name: 'Seconds',
+      name: THROTTLER_SECONDS,
       ttl: 1000,
       limit: Secrets.RATE_LIMITING_PER_SECOND,
     },
     {
-      name: 'Minutes',
+      name: THROTTLER_MINUTES,
       ttl: 60000,
       limit: Secrets.RATE_LIMITING_PER_MINUTE,
     },

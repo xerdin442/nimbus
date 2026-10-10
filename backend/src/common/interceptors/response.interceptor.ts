@@ -5,17 +5,16 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
-import { Response } from 'express';
 
 @Injectable()
 export class ResponseInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const ctx = context.switchToHttp();
-    const response = ctx.getResponse<Response>();
-
+  intercept(
+    _context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<unknown> {
     return next.handle().pipe(
       map<unknown, unknown>((data) => {
-        if (isStreamOrBuffer(data, response)) {
+        if (isStreamOrBuffer(data)) {
           return data;
         }
 
@@ -31,26 +30,10 @@ export class ResponseInterceptor implements NestInterceptor {
   }
 }
 
-function isStreamOrBuffer(data: unknown, response: Response): boolean {
-  if (data === undefined || data === null) {
-    return false;
-  }
-
-  const contentType = response.getHeader('Content-Type');
-  if (
-    typeof contentType === 'string' &&
-    contentType.startsWith('text/event-stream')
-  ) {
-    return true;
-  }
-
+function isStreamOrBuffer(data: unknown): boolean {
   if (Buffer.isBuffer(data)) {
     return true;
   }
 
-  if (typeof data === 'object' && data !== null && 'pipe' in data) {
-    return true;
-  }
-
-  return false;
+  return typeof data === 'object' && data !== null && 'pipe' in data;
 }

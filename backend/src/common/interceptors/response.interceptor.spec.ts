@@ -1,13 +1,9 @@
 import { CallHandler, ExecutionContext } from '@nestjs/common';
 import { lastValueFrom, of } from 'rxjs';
+import { Readable } from 'stream';
 import { ResponseInterceptor } from './response.interceptor';
 
-const contextWith = (contentType?: string) =>
-  ({
-    switchToHttp: () => ({
-      getResponse: () => ({ getHeader: () => contentType }),
-    }),
-  }) as unknown as ExecutionContext;
+const context = {} as ExecutionContext;
 
 const handlerReturning = (value: unknown): CallHandler => ({
   handle: () => of(value),
@@ -16,40 +12,29 @@ const handlerReturning = (value: unknown): CallHandler => ({
 describe('ResponseInterceptor', () => {
   const interceptor = new ResponseInterceptor();
 
-  it('wraps plain payloads in { data }', async () => {
-    const result = await lastValueFrom(
-      interceptor.intercept(contextWith(), handlerReturning({ id: 1 })),
-    );
+  const run = (value: unknown) =>
+    lastValueFrom(interceptor.intercept(context, handlerReturning(value)));
 
-    expect(result).toEqual({ data: { id: 1 } });
+  it('wraps plain payloads in { data }', async () => {
+    await expect(run({ id: 1 })).resolves.toEqual({ data: { id: 1 } });
+  });
+
+  it('wraps null and primitives too', async () => {
+    await expect(run(null)).resolves.toEqual({ data: null });
+    await expect(run('ok')).resolves.toEqual({ data: 'ok' });
   });
 
   it('passes through payloads already shaped as { data, meta }', async () => {
     const paginated = { data: [1, 2], meta: { total: 2 } };
 
-    const result = await lastValueFrom(
-      interceptor.intercept(contextWith(), handlerReturning(paginated)),
-    );
-
-    expect(result).toBe(paginated);
+    await expect(run(paginated)).resolves.toBe(paginated);
   });
 
-  it('does not wrap buffers or event streams', async () => {
+  it('does not wrap buffers or streams', async () => {
     const buffer = Buffer.from('x');
+    const stream = Readable.from(['x']);
 
-    await expect(
-      lastValueFrom(
-        interceptor.intercept(contextWith(), handlerReturning(buffer)),
-      ),
-    ).resolves.toBe(buffer);
-
-    await expect(
-      lastValueFrom(
-        interceptor.intercept(
-          contextWith('text/event-stream'),
-          handlerReturning('event'),
-        ),
-      ),
-    ).resolves.toBe('event');
+    await expect(run(buffer)).resolves.toBe(buffer);
+    await expect(run(stream)).resolves.toBe(stream);
   });
 });

@@ -12,6 +12,12 @@ jest.mock('@src/common/secrets', () => ({
     RATE_LIMITING_PER_SECOND: 100,
     RATE_LIMITING_PER_MINUTE: 1000,
     DASHBOARD_URL: 'http://localhost:5173',
+    JWT_SECRET: 'test-jwt-secret',
+    ENCRYPTION_KEY:
+      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    PLATFORM_MAIL_DRIVER: 'log',
+    RESEND_API_KEY: 're_test_key',
+    PLATFORM_MAIL_FROM: 'Nimbus <no-reply@nimbus.test>',
   },
 }));
 

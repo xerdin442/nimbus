@@ -1,9 +1,11 @@
 import {
   ArgumentsHost,
   BadRequestException,
+  HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
 import { HttpExceptionFilter } from './http-exception.filter';
+import { CodedException } from '@src/common/errors';
 
 jest.mock('@src/common/logger', () => ({
   Logger: () => ({ error: jest.fn() }),
@@ -45,6 +47,27 @@ describe('HttpExceptionFilter', () => {
       error: {
         code: 'Bad Request',
         message: 'name must be a string; city is required',
+      },
+    });
+  });
+
+  it('includes details from a CodedException', () => {
+    filter.catch(
+      new CodedException(
+        HttpStatus.FORBIDDEN,
+        'plan_limit_reached',
+        'Your plan allows 3 locations',
+        { key: 'locations.max', limit: 3, current: 3 },
+      ),
+      hostWith(response),
+    );
+
+    expect(response.status).toHaveBeenCalledWith(403);
+    expect(response.json).toHaveBeenCalledWith({
+      error: {
+        code: 'plan_limit_reached',
+        message: 'Your plan allows 3 locations',
+        details: { key: 'locations.max', limit: 3, current: 3 },
       },
     });
   });

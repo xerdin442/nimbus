@@ -34,8 +34,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const code: string =
         typeof rawCode === 'string' ? rawCode : String(rawCode);
 
+      const details = responseObj?.details;
+
       const body: ErrorResponse = {
-        error: { code, message },
+        error:
+          typeof details === 'object' && details !== null
+            ? { code, message, details: details as Record<string, unknown> }
+            : { code, message },
       };
 
       if (status >= 500) {
