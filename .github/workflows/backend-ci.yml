@@ -36,10 +36,21 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
+      redis:
+        image: redis:latest
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       NODE_ENV: test
       TEST_DATABASE_URL: postgresql://nimbus_app:nimbus_app_ci@localhost:5433/nimbus_test
       TEST_MIGRATION_DATABASE_URL: postgresql://nimbus:nimbus_ci@localhost:5433/nimbus_test
+      REDIS_URL: redis://localhost:6380
 
     steps:
       - uses: actions/checkout@v4
@@ -66,5 +77,5 @@ jobs:
           psql postgresql://nimbus:nimbus_ci@localhost:5433/nimbus_test -v ON_ERROR_STOP=1
           -c "CREATE ROLE nimbus_app LOGIN PASSWORD 'nimbus_app_ci' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;"
 
-      - name: RLS isolation suite
+      - name: e2e (RLS isolation + org setup over HTTP)
         run: npm run test:e2e
