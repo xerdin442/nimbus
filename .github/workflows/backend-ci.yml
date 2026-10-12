@@ -77,5 +77,5 @@ jobs:
           psql postgresql://nimbus:nimbus_ci@localhost:5433/nimbus_test -v ON_ERROR_STOP=1
           -c "CREATE ROLE nimbus_app LOGIN PASSWORD 'nimbus_app_ci' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;"
 
-      - name: e2e (RLS isolation + org setup over HTTP)
+      - name: e2e (RLS isolation, org setup and booking over HTTP)
         run: npm run test:e2e
