@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { ThrottlerModuleOptions, ThrottlerOptions } from '@nestjs/throttler';
 import { Secrets } from '@src/common/secrets';
 
@@ -13,6 +13,16 @@ export const randomAlphanumeric = (length: number): string => {
 
   return result;
 };
+
+/** No 0/O, 1/I/L or U: codes are read aloud and typed in by box-office staff. */
+const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/** Human-friendly code for reservations and tickets */
+export const randomCode = (length: number): string =>
+  Array.from(
+    { length },
+    () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)],
+  ).join('');
 
 export const THROTTLER_SECONDS = 'Seconds';
 export const THROTTLER_MINUTES = 'Minutes';

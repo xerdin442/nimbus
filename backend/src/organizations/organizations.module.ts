@@ -4,11 +4,12 @@ import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
 import { MembersController } from './members.controller';
 import { MembersService } from './members.service';
+import { OrgSettingsService } from './org-settings.service';
 
 @Module({
   imports: [NotificationsModule],
   controllers: [OrganizationsController, MembersController],
-  providers: [OrganizationsService, MembersService],
-  exports: [OrganizationsService, MembersService],
+  providers: [OrganizationsService, MembersService, OrgSettingsService],
+  exports: [OrganizationsService, MembersService, OrgSettingsService],
 })
 export class OrganizationsModule {}

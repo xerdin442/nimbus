@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext } from '@nestjs/common';
+import { CallHandler, ExecutionContext, StreamableFile } from '@nestjs/common';
 import { lastValueFrom, of } from 'rxjs';
 import { Readable } from 'stream';
 import { ResponseInterceptor } from './response.interceptor';
@@ -33,8 +33,10 @@ describe('ResponseInterceptor', () => {
   it('does not wrap buffers or streams', async () => {
     const buffer = Buffer.from('x');
     const stream = Readable.from(['x']);
+    const file = new StreamableFile(buffer, { type: 'image/png' });
 
     await expect(run(buffer)).resolves.toBe(buffer);
     await expect(run(stream)).resolves.toBe(stream);
+    await expect(run(file)).resolves.toBe(file);
   });
 });

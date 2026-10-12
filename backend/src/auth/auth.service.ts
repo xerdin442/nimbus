@@ -4,15 +4,16 @@ import { DbService } from '@src/db/db.service';
 import { memberships, organizations, users } from '@src/db/schema';
 import type { User } from '@src/db/schema/types';
 import { PasswordService } from '@src/common/helpers';
-import { CodedException } from '@src/common/errors';
+import {
+  CodedException,
+  isPgError,
+  PG_UNIQUE_VIOLATION,
+} from '@src/common/errors';
 import { OrganizationsService } from '@src/organizations/organizations.service';
 import { MembersService } from '@src/organizations/members.service';
 import type { ClientInfo } from '@src/common/types';
 import { SessionsService } from './sessions.service';
 import { AcceptInvitationDto, LoginDto, SignupDto } from './dto/auth.dto';
-
-const isUniqueViolation = (error: unknown) =>
-  (error as { cause?: { code?: string } })?.cause?.code === '23505';
 
 @Injectable()
 export class AuthService {
@@ -50,7 +51,7 @@ export class AuthService {
         tokens: await this.sessions.start(user.id, client),
       };
     } catch (error) {
-      if (isUniqueViolation(error)) {
+      if (isPgError(error, PG_UNIQUE_VIOLATION)) {
         throw new CodedException(
           HttpStatus.CONFLICT,
           'email_already_exists',

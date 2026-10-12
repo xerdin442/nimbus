@@ -19,9 +19,7 @@ export class OrgVerifiedGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    if (!required) {
-      return true;
-    }
+    if (!required) return true;
 
     const request = context.switchToHttp().getRequest<DashboardRequest>();
 

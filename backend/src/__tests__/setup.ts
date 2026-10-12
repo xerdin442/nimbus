@@ -18,6 +18,7 @@ jest.mock('@src/common/secrets', () => ({
     PLATFORM_MAIL_DRIVER: 'log',
     RESEND_API_KEY: 're_test_key',
     PLATFORM_MAIL_FROM: 'Nimbus <no-reply@nimbus.test>',
+    TICKET_SIGNING_SECRET: 'test-ticket-signing-secret',
   },
 }));
 

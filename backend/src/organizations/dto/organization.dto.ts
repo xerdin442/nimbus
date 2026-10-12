@@ -1,11 +1,14 @@
 import {
   IsEmail,
   IsIn,
+  IsInt,
   IsISO31661Alpha2,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 /** Currencies Paystack settles in. */
@@ -40,4 +43,24 @@ export class UpdateOrganizationDto {
   @IsOptional()
   @IsEmail()
   notificationEmail?: string;
+}
+
+export class UpdateOrgSettingsDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(60)
+  adsMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  cleanupMinutes?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(30)
+  holdMinutes?: number;
 }

@@ -18,6 +18,7 @@ interface SecretsConfig {
   PLATFORM_MAIL_DRIVER: 'resend' | 'log';
   RESEND_API_KEY: string;
   PLATFORM_MAIL_FROM: string;
+  TICKET_SIGNING_SECRET: string;
 }
 
 export const Secrets: SecretsConfig = {
@@ -33,6 +34,7 @@ export const Secrets: SecretsConfig = {
   PLATFORM_MAIL_DRIVER: getOneOf('PLATFORM_MAIL_DRIVER', ['resend', 'log']),
   RESEND_API_KEY: getString('RESEND_API_KEY'),
   PLATFORM_MAIL_FROM: getString('PLATFORM_MAIL_FROM'),
+  TICKET_SIGNING_SECRET: getString('TICKET_SIGNING_SECRET'),
 };
 
 function getString(key: string): string {

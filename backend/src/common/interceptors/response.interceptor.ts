@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable, map } from 'rxjs';
 
@@ -31,7 +32,7 @@ export class ResponseInterceptor implements NestInterceptor {
 }
 
 function isStreamOrBuffer(data: unknown): boolean {
-  if (Buffer.isBuffer(data)) {
+  if (Buffer.isBuffer(data) || data instanceof StreamableFile) {
     return true;
   }
 

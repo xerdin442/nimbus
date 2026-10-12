@@ -7,11 +7,17 @@ import type {
   ConfigStatus,
   Invitation,
   MailConfig,
+  Movie,
+  OrgSettings,
   PaymentConfig,
+  Reservation,
   Role,
+  Screen,
   SeatLayout,
   SeatType,
   Session,
+  Showtime,
+  Ticket,
 } from '@src/db/schema/types';
 import type {
   BASIC_ENTITLEMENTS,
@@ -168,3 +174,119 @@ export type LimitKey = {
 }[EntitlementKey];
 
 export type TestModeLimitKey = keyof typeof TEST_MODE_LIMITS;
+
+export type OrgSettingsView = Pick<
+  OrgSettings,
+  'adsMinutes' | 'cleanupMinutes' | 'holdMinutes'
+>;
+
+export interface SeatCounts {
+  available: number;
+  held: number;
+  sold: number;
+}
+
+/** A showtime with what a listing needs to display it; seat counts are for the request's mode. */
+export type ShowtimeView = Omit<Showtime, 'organizationId'> & {
+  movie: Pick<
+    Movie,
+    'id' | 'title' | 'runtimeMinutes' | 'rating' | 'posterUrl'
+  >;
+  screen: Pick<Screen, 'id' | 'name' | 'format'>;
+  currency: string;
+  seats: SeatCounts;
+};
+
+/** A showtime seat with its label: `id` is the showtime seat id that holds and tickets use. */
+export interface InventorySeat extends LabeledSeat {
+  id: string;
+}
+
+export interface SeatMapView {
+  showtimeId: string;
+  rows: number;
+  columns: number;
+  currency: string;
+  seats: (InventorySeat & { price: number; available: boolean })[];
+}
+
+export interface ShowtimeCancelledEvent {
+  orgId: string;
+  livemode: boolean;
+  showtimeId: string;
+}
+
+export type TicketView = Pick<
+  Ticket,
+  'id' | 'code' | 'checkedInAt' | 'showtimeSeatId'
+> & {
+  seat: Pick<LabeledSeat, 'rowLabel' | 'number' | 'type'>;
+  /** Signed token encoded in the ticket's QR code. */
+  qrToken: string;
+};
+
+export type ReservationView = Omit<
+  Reservation,
+  'organizationId' | 'createdByUserId'
+> & {
+  seats: (InventorySeat & { price: number })[];
+  tickets: TicketView[];
+};
+
+export const SCAN_RESULTS = [
+  'valid',
+  'already_used',
+  'void',
+  'wrong_mode',
+  'wrong_location',
+  'too_early',
+  'not_today',
+  'showtime_ended',
+  'invalid',
+] as const;
+export type ScanResult = (typeof SCAN_RESULTS)[number];
+
+export interface ScannedTicket {
+  id: string;
+  code: string;
+  seat: Pick<LabeledSeat, 'rowLabel' | 'number' | 'type'>;
+  reservationCode: string;
+  customerName: string | null;
+  movieTitle: string;
+  screenName: string;
+  startsAt: Date;
+  checkedInAt: Date | null;
+}
+
+export interface ScanOutcome {
+  result: ScanResult;
+  /** Present once the ticket is identified (every result but `invalid` and `wrong_mode`). */
+  ticket?: ScannedTicket;
+}
+
+export interface ExpireReservationJob {
+  orgId: string;
+  livemode: boolean;
+  reservationId: string;
+}
+
+/** Dashboard reservation search row. */
+export type ReservationSummary = Omit<
+  Reservation,
+  'organizationId' | 'createdByUserId'
+> & {
+  showtime: Pick<Showtime, 'id' | 'startsAt' | 'locationId'>;
+  movieTitle: string;
+};
+
+export interface QrTokenPayload {
+  ticketId: string;
+  livemode: boolean;
+}
+
+export interface OfflinePayment {
+  reservationId: string;
+  method: 'cash' | 'pos';
+  amount: number;
+  currency: string;
+}
