@@ -16,3 +16,41 @@ export const seatTypeEnum = pgEnum('seat_type', [
   'couple',
   'wheelchair',
 ]);
+
+export const showtimeStatusEnum = pgEnum('showtime_status', [
+  'draft',
+  'published',
+  'cancelled',
+]);
+
+export const showtimeSeatStatusEnum = pgEnum('showtime_seat_status', [
+  'available',
+  'held',
+  'sold',
+]);
+
+export const reservationStatusEnum = pgEnum('reservation_status', [
+  'pending',
+  'confirmed',
+  'expired',
+  'cancelled',
+  'refunded',
+]);
+
+export const reservationChannelEnum = pgEnum('reservation_channel', [
+  'api',
+  'box_office',
+]);
+
+/** `online` goes through a payment provider; `cash` and `pos` are box-office methods. */
+export const paymentMethodEnum = pgEnum('payment_method', [
+  'online',
+  'cash',
+  'pos',
+]);
+
+export const paymentStatusEnum = pgEnum('payment_status', [
+  'pending',
+  'succeeded',
+  'failed',
+]);

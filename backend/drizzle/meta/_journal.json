@@ -36,6 +36,34 @@
       "when": 1791479890249,
       "tag": "0004_one_org_per_user",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791657426529,
+      "tag": "0005_booking",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791657438752,
+      "tag": "0006_booking_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791711349112,
+      "tag": "0007_mode_scoped_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791711372934,
+      "tag": "0008_mode_scoped_catalog_rls",
+      "breakpoints": true
     }
   ]
 }

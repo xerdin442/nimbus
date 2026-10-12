@@ -73,7 +73,7 @@ export class MoviesService {
     const [movie] = await this.db.withTenant(ctx, (tx) =>
       tx
         .insert(movies)
-        .values({ organizationId: ctx.orgId, ...dto })
+        .values({ organizationId: ctx.orgId, livemode: ctx.livemode, ...dto })
         .returning(),
     );
     return movie;

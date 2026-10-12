@@ -1,5 +1,12 @@
-import { index, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
-import { id, timestamps } from './columns';
+import {
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+} from 'drizzle-orm/pg-core';
+import { id, livemode, timestamps } from './columns';
 import { organizationId } from './organizations';
 
 export const movies = pgTable(
@@ -7,6 +14,7 @@ export const movies = pgTable(
   {
     id: id(),
     organizationId: organizationId(),
+    livemode: livemode(),
     title: text('title').notNull(),
     synopsis: text('synopsis'),
     runtimeMinutes: integer('runtime_minutes').notNull(),
@@ -19,5 +27,9 @@ export const movies = pgTable(
     archivedAt: timestamp('archived_at', { withTimezone: true }),
     ...timestamps,
   },
-  (table) => [index('movies_organization_id_idx').on(table.organizationId)],
+  (table) => [
+    index('movies_organization_id_idx').on(table.organizationId),
+    // Target of showtimes' (movie_id, livemode) foreign key: a showtime's movie is in its mode.
+    unique('movies_id_livemode_unique').on(table.id, table.livemode),
+  ],
 );
