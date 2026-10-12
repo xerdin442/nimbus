@@ -1,174 +1,23 @@
-import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import request from 'supertest';
-import type { App } from 'supertest/types';
-import { Pool } from 'pg';
-import { AppModule } from '@src/app.module';
-import { configureApp } from '@src/app.setup';
 import type { RedisClientType } from 'redis';
-import { PlatformMailService } from '@src/notifications/platform-mail.service';
 import { REDIS_CLIENT } from '@src/common/cache';
-import { createOwnerPool, resetTestDatabase } from './utils/test-db';
+import { useE2eApp, type Session } from './utils/e2e-app';
 
-/**
- * Phase 1 over HTTP: the real app, test database and Redis. Only the outside world is faked:
- * fetch to Paystack / Brevo is stubbed, and platform emails go to the log driver (captured).
- */
+/** Phase 1 over HTTP: auth, orgs, members, provider configs, API keys and the catalog. */
 describe('Org setup (e2e)', () => {
-  let app: INestApplication<App>;
-  let ownerPool: Pool;
-  let platformMail: jest.SpyInstance;
-
-  // Fake outbound HTTP. Paystack accepts keys ending in "good"; Brevo accepts any key but "bad".
-  const realFetch = globalThis.fetch;
-  const fetchMock = jest.spyOn(globalThis, 'fetch');
-
-  const json = (status: number, body: unknown) =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { 'content-type': 'application/json' },
-    });
-
-  const routeFetch = async (
-    input: string | URL | Request,
-    init?: RequestInit,
-  ): Promise<Response> => {
-    const url = input instanceof Request ? input.url : String(input);
-    const headers = new Headers(init?.headers);
-
-    if (url.startsWith('https://api.paystack.co/')) {
-      return headers.get('authorization')?.endsWith('good')
-        ? json(200, { status: true, data: [] })
-        : json(401, { status: false, message: 'Invalid key' });
-    }
-    if (url.startsWith('https://api.brevo.com/')) {
-      return headers.get('api-key') === 'bad'
-        ? json(401, { message: 'Key not found' })
-        : json(201, { messageId: '<msg@brevo>' });
-    }
-    return realFetch(input, init);
-  };
-
-  const http = () => request(app.getHttpServer());
-
-  interface Session {
-    accessToken: string;
-    refreshToken: string;
-    orgId: string;
-    email: string;
-  }
-
-  let counter = 0;
-  const signup = async (orgName = 'Filmhouse'): Promise<Session> => {
-    const email = `owner${++counter}@example.com`;
-    const res = await http()
-      .post('/api/auth/signup')
-      .send({
-        name: 'Ada Owner',
-        email,
-        password: 'correct-horse-battery',
-        organization: { name: orgName, country: 'NG', currency: 'NGN' },
-      })
-      .expect(201);
-
-    return {
-      accessToken: res.body.data.tokens.accessToken,
-      refreshToken: res.body.data.tokens.refreshToken,
-      orgId: res.body.data.organization.id,
-      email,
-    };
-  };
-
-  /**
-   * Dashboard request as `session`, in `mode` (default: header omitted = live). No org header:
-   * a user belongs to one org, resolved from the session.
-   */
-  const dash = (
-    method: 'get' | 'post' | 'put' | 'patch' | 'delete',
-    path: string,
-    session: Session,
-    mode?: 'test' | 'live',
-  ) => {
-    const req = http()
-      [method](`/api/dashboard${path}`)
-      .set('authorization', `Bearer ${session.accessToken}`);
-    return mode ? req.set('x-nimbus-mode', mode) : req;
-  };
-
-  interface InviteOptions {
-    role?: 'manager' | 'staff';
-    locationIds?: string[];
-  }
-
-  /** `inviter` invites `email` (default: staff, all locations); returns the emailed token. */
-  const inviteToken = async (
-    inviter: Session,
-    email: string,
-    { role = 'staff', locationIds }: InviteOptions = {},
-  ) => {
-    platformMail.mockClear();
-    await dash('post', '/members/invitations', inviter)
-      .send({ email, role, locationIds })
-      .expect(201);
-    const [, sent] = platformMail.mock.calls[0] as [string, { text: string }];
-    return /token=([\w-]+)/.exec(sent.text)![1];
-  };
-
-  /** A new user who accepted `inviter`'s invite. */
-  const joinAs = async (
-    inviter: Session,
-    email: string,
-    options: InviteOptions = {},
-  ) => {
-    const token = await inviteToken(inviter, email, options);
-    const accepted = await http()
-      .post('/api/auth/invitations/accept')
-      .send({ token, name: 'Sam Member', password: 'member-password-1' })
-      .expect(200);
-
-    return {
-      ...inviter,
-      email,
-      accessToken: accepted.body.data.tokens.accessToken as string,
-      refreshToken: accepted.body.data.tokens.refreshToken as string,
-      userId: accepted.body.data.user.id as string,
-    };
-  };
+  const {
+    ctx,
+    http,
+    seq,
+    dash,
+    signup,
+    inviteToken,
+    joinAs,
+    verify,
+    location,
+  } = useE2eApp();
 
   const joinAsStaff = (inviter: Session, email: string) =>
     joinAs(inviter, email);
-
-  const location = (name: string) => ({
-    name,
-    address: '1 Admiralty Way',
-    city: 'Lagos',
-    timezone: 'Africa/Lagos',
-  });
-
-  beforeAll(async () => {
-    ownerPool = createOwnerPool();
-    await resetTestDatabase(ownerPool);
-
-    const moduleRef = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-    app = configureApp(
-      moduleRef.createNestApplication<INestApplication<App>>(),
-    );
-    await app.init();
-
-    platformMail = jest.spyOn(app.get(PlatformMailService), 'send');
-  });
-
-  beforeEach(() => {
-    fetchMock.mockImplementation(routeFetch);
-  });
-
-  afterAll(async () => {
-    fetchMock.mockRestore();
-    await app?.close();
-    await ownerPool?.end();
-  });
 
   describe('auth', () => {
     it('signs up an owner with a new org and returns tokens', async () => {
@@ -395,7 +244,7 @@ describe('Org setup (e2e)', () => {
         ),
       );
 
-      const { rows } = await ownerPool.query<{ active: number }>(
+      const { rows } = await ctx.ownerPool.query<{ active: number }>(
         `select count(*)::int as active from sessions s
            join users u on u.id = s.user_id
           where u.email = $1 and s.revoked_at is null`,
@@ -650,7 +499,7 @@ describe('Org setup (e2e)', () => {
         .send(location('Surulere'))
         .expect(201);
 
-      platformMail.mockClear();
+      ctx.platformMail.mockClear();
       const invite = await dash('post', '/members/invitations', owner)
         .send({
           email: 'Staff@Example.com',
@@ -661,7 +510,7 @@ describe('Org setup (e2e)', () => {
       expect(invite.body.data.emailSent).toBe(true);
       expect(invite.body.data.invitation.tokenHash).toBeUndefined();
 
-      const [to, email] = platformMail.mock.calls[0] as [
+      const [to, email] = ctx.platformMail.mock.calls[0] as [
         string,
         { text: string },
       ];
@@ -761,7 +610,7 @@ describe('Org setup (e2e)', () => {
           .send(location('Ikeja'))
           .expect(201)
       ).body.data.id as string;
-      const manager = await joinAs(owner, `mgr-${++counter}@example.com`, {
+      const manager = await joinAs(owner, `mgr-${seq()}@example.com`, {
         role: 'manager',
         locationIds: [lekki],
       });
@@ -783,26 +632,26 @@ describe('Org setup (e2e)', () => {
       const { manager, lekki, ikeja } = await managerSetup();
 
       await invite(manager, {
-        email: `s${++counter}@example.com`,
+        email: `s${seq()}@example.com`,
         role: 'staff',
         locationIds: [lekki],
       }).expect(201);
 
       const allLocations = await invite(manager, {
-        email: `s${++counter}@example.com`,
+        email: `s${seq()}@example.com`,
         role: 'staff',
       }).expect(403);
       expect(allLocations.body.error.code).toBe('location_forbidden');
 
       const otherLocation = await invite(manager, {
-        email: `s${++counter}@example.com`,
+        email: `s${seq()}@example.com`,
         role: 'staff',
         locationIds: [ikeja],
       }).expect(403);
       expect(otherLocation.body.error.code).toBe('location_forbidden');
 
       const aManager = await invite(manager, {
-        email: `s${++counter}@example.com`,
+        email: `s${seq()}@example.com`,
         role: 'manager',
         locationIds: [lekki],
       }).expect(403);
@@ -812,10 +661,10 @@ describe('Org setup (e2e)', () => {
     // Basic allows 5 members incl. pending invites, so members and invitations get a test each.
     it('lists only members within their locations', async () => {
       const { owner, manager, lekki, ikeja } = await managerSetup();
-      const lekkiStaff = await joinAs(owner, `s${++counter}@example.com`, {
+      const lekkiStaff = await joinAs(owner, `s${seq()}@example.com`, {
         locationIds: [lekki],
       });
-      await joinAs(owner, `s${++counter}@example.com`, {
+      await joinAs(owner, `s${seq()}@example.com`, {
         locationIds: [ikeja],
       });
 
@@ -831,9 +680,9 @@ describe('Org setup (e2e)', () => {
 
     it('lists only invitations within their locations', async () => {
       const { owner, manager, lekki, ikeja } = await managerSetup();
-      const pendingLekki = `p${++counter}@example.com`;
+      const pendingLekki = `p${seq()}@example.com`;
       await inviteToken(owner, pendingLekki, { locationIds: [lekki] });
-      await inviteToken(owner, `p${++counter}@example.com`, {
+      await inviteToken(owner, `p${seq()}@example.com`, {
         locationIds: [ikeja],
       });
 
@@ -846,13 +695,13 @@ describe('Org setup (e2e)', () => {
 
     it('updates and removes staff in their locations, but never owners or managers', async () => {
       const { owner, ownerId, manager, lekki, ikeja } = await managerSetup();
-      const lekkiStaff = await joinAs(owner, `s${++counter}@example.com`, {
+      const lekkiStaff = await joinAs(owner, `s${seq()}@example.com`, {
         locationIds: [lekki],
       });
-      const ikejaStaff = await joinAs(owner, `s${++counter}@example.com`, {
+      const ikejaStaff = await joinAs(owner, `s${seq()}@example.com`, {
         locationIds: [ikeja],
       });
-      const otherManager = await joinAs(owner, `m${++counter}@example.com`, {
+      const otherManager = await joinAs(owner, `m${seq()}@example.com`, {
         role: 'manager',
         locationIds: [lekki],
       });
@@ -900,10 +749,10 @@ describe('Org setup (e2e)', () => {
 
     it('resends and revokes only invitations within their locations', async () => {
       const { owner, manager, lekki, ikeja } = await managerSetup();
-      await inviteToken(owner, `p${++counter}@example.com`, {
+      await inviteToken(owner, `p${seq()}@example.com`, {
         locationIds: [lekki],
       });
-      await inviteToken(owner, `p${++counter}@example.com`, {
+      await inviteToken(owner, `p${seq()}@example.com`, {
         locationIds: [ikeja],
       });
       const pending = (await dash('get', '/members', owner).expect(200)).body
@@ -937,12 +786,12 @@ describe('Org setup (e2e)', () => {
 
     it('lets general managers manage scoped managers, but never owners or fellow general managers', async () => {
       const { owner, ownerId, manager, lekki, ikeja } = await managerSetup();
-      const generalManager = await joinAs(owner, `gm${++counter}@example.com`, {
+      const generalManager = await joinAs(owner, `gm${seq()}@example.com`, {
         role: 'manager',
       });
       const ikejaManager = await joinAs(
         generalManager,
-        `m${++counter}@example.com`,
+        `m${seq()}@example.com`,
         { role: 'manager', locationIds: [ikeja] },
       );
 
@@ -952,7 +801,7 @@ describe('Org setup (e2e)', () => {
 
       for (const res of [
         await invite(generalManager, {
-          email: `gm${++counter}@example.com`,
+          email: `gm${seq()}@example.com`,
           role: 'manager',
         }),
         await dash('patch', `/members/${manager.userId}`, generalManager).send({
@@ -987,10 +836,10 @@ describe('Org setup (e2e)', () => {
 
     it('lets only owners and general managers archive movies', async () => {
       const { owner, manager, lekki } = await managerSetup();
-      const generalManager = await joinAs(owner, `gm${++counter}@example.com`, {
+      const generalManager = await joinAs(owner, `gm${seq()}@example.com`, {
         role: 'manager',
       });
-      const staff = await joinAs(owner, `s${++counter}@example.com`, {
+      const staff = await joinAs(owner, `s${seq()}@example.com`, {
         locationIds: [lekki],
       });
       const movieId = (
@@ -1115,20 +964,6 @@ describe('Org setup (e2e)', () => {
   });
 
   describe('API keys and the public API', () => {
-    const verify = async (session: Session) => {
-      await dash('put', '/mail-config', session)
-        .send({
-          provider: 'brevo',
-          apiKey: 'xkeysib-good',
-          fromEmail: 'tickets@filmhouse.test',
-          fromName: 'Filmhouse',
-        })
-        .expect(200);
-      await dash('put', '/payment-config', session, 'live')
-        .send({ secretKey: 'sk_live_good' })
-        .expect(200);
-    };
-
     it('creates test keys any time, but live keys only for a verified org', async () => {
       const session = await signup();
 
@@ -1237,10 +1072,10 @@ describe('Org setup (e2e)', () => {
 
     /** Requests a reset for `email` and returns the token from the captured email. */
     const resetToken = async (email: string) => {
-      platformMail.mockClear();
+      ctx.platformMail.mockClear();
       await forgot(email);
-      expect(platformMail).toHaveBeenCalledTimes(1);
-      const [to, sent] = platformMail.mock.calls[0] as [
+      expect(ctx.platformMail).toHaveBeenCalledTimes(1);
+      const [to, sent] = ctx.platformMail.mock.calls[0] as [
         string,
         { text: string },
       ];
@@ -1254,12 +1089,12 @@ describe('Org setup (e2e)', () => {
     it('answers the same for unknown emails, and only emails real accounts', async () => {
       const session = await signup();
 
-      platformMail.mockClear();
+      ctx.platformMail.mockClear();
       const unknown = await forgot('nobody-here@example.com');
-      expect(platformMail).not.toHaveBeenCalled();
+      expect(ctx.platformMail).not.toHaveBeenCalled();
 
       const known = await forgot(session.email);
-      expect(platformMail).toHaveBeenCalledTimes(1);
+      expect(ctx.platformMail).toHaveBeenCalledTimes(1);
 
       expect(known.body).toEqual(unknown.body);
     });
@@ -1301,12 +1136,12 @@ describe('Org setup (e2e)', () => {
       const first = await resetToken(session.email);
 
       // Within the cooldown: no second email.
-      platformMail.mockClear();
+      ctx.platformMail.mockClear();
       await forgot(session.email);
-      expect(platformMail).not.toHaveBeenCalled();
+      expect(ctx.platformMail).not.toHaveBeenCalled();
 
       // Simulate the cooldown passing, then request again.
-      const redis = app.get<RedisClientType>(REDIS_CLIENT);
+      const redis = ctx.app.get<RedisClientType>(REDIS_CLIENT);
       const me = await http()
         .get('/api/auth/me')
         .set('authorization', `Bearer ${session.accessToken}`);

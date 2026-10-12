@@ -20,8 +20,15 @@ const defaults: Record<string, string> = {
   ENCRYPTION_KEY: 'e2e-encryption-key',
   RESEND_API_KEY: 're_e2e',
   PLATFORM_MAIL_FROM: 'Nimbus <no-reply@nimbus.test>',
+  TICKET_SIGNING_SECRET: 'e2e-ticket-signing-secret',
 };
 
 for (const [key, value] of Object.entries(defaults)) {
   process.env[key] ??= value;
 }
+
+// Redis database 1, apart from development's database 0: a running dev server's BullMQ workers
+// would otherwise pick up the suites' jobs (and run them against the dev database).
+const redisUrl = new URL(process.env.REDIS_URL!);
+redisUrl.pathname = '/1';
+process.env.REDIS_URL = redisUrl.toString();
