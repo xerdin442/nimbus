@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import type { RedisClientType } from 'redis';
 import { RequestLoggerMiddleware } from './common/middleware/request-logger.middleware';
 import { DashboardModeMiddleware } from './common/middleware/dashboard-mode.middleware';
@@ -19,11 +20,15 @@ import { ApiKeysModule } from './api-keys/api-keys.module';
 import { LocationsModule } from './locations/locations.module';
 import { ScreensModule } from './screens/screens.module';
 import { MoviesModule } from './movies/movies.module';
+import { ShowtimesModule } from './showtimes/showtimes.module';
+import { TicketsModule } from './tickets/tickets.module';
+import { ReservationsModule } from './reservations/reservations.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot(applyThrottlerConfig()),
+    EventEmitterModule.forRoot(),
     BullModule.forRootAsync({
       imports: [RedisModule],
       inject: [REDIS_CLIENT],
@@ -41,6 +46,9 @@ import { MoviesModule } from './movies/movies.module';
     LocationsModule,
     ScreensModule,
     MoviesModule,
+    ShowtimesModule,
+    TicketsModule,
+    ReservationsModule,
   ],
 
   providers: [
