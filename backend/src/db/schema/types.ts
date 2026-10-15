@@ -5,6 +5,8 @@ import {
   paymentMethodEnum,
   paymentProviderEnum,
   paymentStatusEnum,
+  refundReasonEnum,
+  refundStatusEnum,
   reservationChannelEnum,
   reservationStatusEnum,
   roleEnum,
@@ -28,8 +30,10 @@ import { movies } from './movies';
 import { webhookEndpoints } from './webhook-endpoints';
 import { orgSettings } from './org-settings';
 import { showtimes, showtimeSeats } from './showtimes';
-import { payments, reservations, tickets } from './reservations';
+import { reservations, tickets } from './reservations';
+import { paymentEvents, payments } from './payments';
 import { idempotencyKeys } from './idempotency-keys';
+import { refunds } from './refunds';
 
 // ── Enums ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -68,6 +72,12 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_STATUSES = paymentStatusEnum.enumValues;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const REFUND_STATUSES = refundStatusEnum.enumValues;
+export type RefundStatus = (typeof REFUND_STATUSES)[number];
+
+export const REFUND_REASONS = refundReasonEnum.enumValues;
+export type RefundReason = (typeof REFUND_REASONS)[number];
 
 /** Minor units per seat type. A showtime prices every seat type its layout uses. */
 export type SeatPrices = Partial<Record<SeatType, number>>;
@@ -119,3 +129,7 @@ export type Payment = typeof payments.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 
 export type IdempotencyKey = typeof idempotencyKeys.$inferSelect;
+
+export type Refund = typeof refunds.$inferSelect;
+
+export type PaymentEvent = typeof paymentEvents.$inferSelect;

@@ -1,3 +1,4 @@
+import { createHmac } from 'crypto';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -29,17 +30,115 @@ const json = (status: number, body: unknown) =>
     headers: { 'content-type': 'application/json' },
   });
 
-/** Fake outbound HTTP. Paystack accepts keys ending in "good"; Brevo accepts any key but "bad". */
+export interface FakeTransaction {
+  secretKey: string;
+  email: string;
+  amount: number;
+  currency: string;
+  callbackUrl: string;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * The fake Paystack's state, per suite. Keys ending in "good" are accepted until revoked;
+ * verify reports `verifyStatus` for a reference (default `abandoned`: never paid).
+ */
+export interface FakePaystack {
+  transactions: Map<string, FakeTransaction>;
+  verifyStatus: Map<string, string>;
+  refunds: { secretKey: string; reference: string }[];
+  revokedKeys: Set<string>;
+  /** Next refund call answers with this HTTP status instead of succeeding. */
+  failNextRefund?: number;
+}
+
+const paystackResponse = (
+  paystack: FakePaystack,
+  url: URL,
+  method: string,
+  secretKey: string,
+  body: Record<string, unknown>,
+) => {
+  if (!secretKey.endsWith('good') || paystack.revokedKeys.has(secretKey)) {
+    return json(401, { status: false, message: 'Invalid key' });
+  }
+
+  if (method === 'POST' && url.pathname === '/transaction/initialize') {
+    const reference = body.reference as string;
+    paystack.transactions.set(reference, {
+      secretKey,
+      email: body.email as string,
+      amount: body.amount as number,
+      currency: body.currency as string,
+      callbackUrl: body.callback_url as string,
+      metadata: JSON.parse(body.metadata as string) as Record<string, unknown>,
+    });
+    return json(200, {
+      status: true,
+      data: {
+        authorization_url: `https://checkout.paystack.com/${reference}`,
+        access_code: reference,
+        reference,
+      },
+    });
+  }
+
+  const verify = /^\/transaction\/verify\/(.+)$/.exec(url.pathname);
+  if (verify) {
+    const reference = decodeURIComponent(verify[1]);
+    const transaction = paystack.transactions.get(reference);
+    if (!transaction) {
+      return json(400, {
+        status: false,
+        message: 'Transaction reference not found',
+      });
+    }
+    return json(200, {
+      status: true,
+      data: {
+        id: 4_000_000_000 + paystack.transactions.size,
+        status: paystack.verifyStatus.get(reference) ?? 'abandoned',
+        reference,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        paid_at: new Date().toISOString(),
+      },
+    });
+  }
+
+  if (method === 'POST' && url.pathname === '/refund') {
+    if (paystack.failNextRefund) {
+      const status = paystack.failNextRefund;
+      paystack.failNextRefund = undefined;
+      return json(status, { status: false, message: 'Refund failed' });
+    }
+    paystack.refunds.push({ secretKey, reference: body.transaction as string });
+    return json(200, {
+      status: true,
+      data: { id: 3_000_000 + paystack.refunds.length, status: 'pending' },
+    });
+  }
+
+  return json(200, { status: true, data: [] });
+};
+
+/** Fake outbound HTTP: Paystack (see FakePaystack) and Brevo, which accepts any key but "bad". */
 const fakeFetch =
-  (realFetch: typeof fetch) =>
+  (realFetch: typeof fetch, paystack: FakePaystack) =>
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     const headers = new Headers(init?.headers);
 
     if (url.startsWith('https://api.paystack.co/')) {
-      return headers.get('authorization')?.endsWith('good')
-        ? json(200, { status: true, data: [] })
-        : json(401, { status: false, message: 'Invalid key' });
+      return paystackResponse(
+        paystack,
+        new URL(url),
+        init?.method ?? 'GET',
+        headers.get('authorization')?.replace('Bearer ', '') ?? '',
+        init?.body
+          ? (JSON.parse(init.body as string) as Record<string, unknown>)
+          : {},
+      );
     }
     if (url.startsWith('https://api.brevo.com/')) {
       return headers.get('api-key') === 'bad'
@@ -75,7 +174,13 @@ export async function eventually(
 export function useE2eApp() {
   const realFetch = globalThis.fetch;
   const fetchMock = jest.spyOn(globalThis, 'fetch');
-  const fake = fakeFetch(realFetch);
+  const paystack: FakePaystack = {
+    transactions: new Map(),
+    verifyStatus: new Map(),
+    refunds: [],
+    revokedKeys: new Set(),
+  };
+  const fake = fakeFetch(realFetch, paystack);
 
   /** Set in `beforeAll`; read them inside tests and hooks only. */
   const ctx = {} as {
@@ -96,7 +201,8 @@ export function useE2eApp() {
       imports: [AppModule],
     }).compile();
     ctx.app = configureApp(
-      moduleRef.createNestApplication<INestApplication<App>>(),
+      // As in main.ts: webhook signatures are checked against the raw body.
+      moduleRef.createNestApplication<INestApplication<App>>({ rawBody: true }),
     );
     await ctx.app.init();
 
@@ -212,6 +318,30 @@ export function useE2eApp() {
       .expect(200);
   };
 
+  /** Connects a Paystack key for `mode` (keys ending in "good" pass the connection test). */
+  const connectPaystack = (session: Session, mode: Mode, secretKey: string) =>
+    dash('put', '/payment-config', session, mode)
+      .send({ secretKey })
+      .expect(200);
+
+  /** POST a Paystack webhook signed with `secretKey`, as Paystack would. */
+  const paystackWebhook = (
+    orgId: string,
+    mode: Mode,
+    secretKey: string,
+    payload: Record<string, unknown>,
+  ) => {
+    const body = JSON.stringify(payload);
+    return http()
+      .post(`/api/webhooks/paystack/${orgId}/${mode}`)
+      .set('content-type', 'application/json')
+      .set(
+        'x-paystack-signature',
+        createHmac('sha512', secretKey).update(body).digest('hex'),
+      )
+      .send(body);
+  };
+
   /** Creates an API key and returns the full key (shown once). */
   const createApiKey = async (
     session: Session,
@@ -231,6 +361,7 @@ export function useE2eApp() {
 
   return {
     ctx,
+    paystack,
     http,
     seq,
     dash,
@@ -239,6 +370,8 @@ export function useE2eApp() {
     inviteToken,
     joinAs,
     verify,
+    connectPaystack,
+    paystackWebhook,
     createApiKey,
     location,
   };

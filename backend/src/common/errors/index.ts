@@ -10,7 +10,7 @@ export const isPgError = (error: unknown, code: string): boolean =>
 export class CodedException extends HttpException {
   constructor(
     status: HttpStatus,
-    code: string,
+    readonly code: string,
     message: string,
     details?: Record<string, unknown>,
   ) {

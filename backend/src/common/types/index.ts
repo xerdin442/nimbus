@@ -10,6 +10,8 @@ import type {
   Movie,
   OrgSettings,
   PaymentConfig,
+  Refund,
+  RefundReason,
   Reservation,
   Role,
   Screen,
@@ -210,12 +212,6 @@ export interface SeatMapView {
   seats: (InventorySeat & { price: number; available: boolean })[];
 }
 
-export interface ShowtimeCancelledEvent {
-  orgId: string;
-  livemode: boolean;
-  showtimeId: string;
-}
-
 export type TicketView = Pick<
   Ticket,
   'id' | 'code' | 'checkedInAt' | 'showtimeSeatId'
@@ -225,12 +221,19 @@ export type TicketView = Pick<
   qrToken: string;
 };
 
-export type ReservationView = Omit<
-  Reservation,
-  'organizationId' | 'createdByUserId'
-> & {
+/** Columns kept off reservation responses. */
+export type InternalReservationColumns =
+  'organizationId' | 'createdByUserId' | 'seatIds' | 'paymentId';
+
+export type RefundView = Pick<
+  Refund,
+  'id' | 'status' | 'reason' | 'amount' | 'currency' | 'createdAt' | 'updatedAt'
+>;
+
+export type ReservationView = Omit<Reservation, InternalReservationColumns> & {
   seats: (InventorySeat & { price: number })[];
   tickets: TicketView[];
+  refund: RefundView | null;
 };
 
 export const SCAN_RESULTS = [
@@ -264,16 +267,10 @@ export interface ScanOutcome {
   ticket?: ScannedTicket;
 }
 
-export interface ExpireReservationJob {
-  orgId: string;
-  livemode: boolean;
-  reservationId: string;
-}
-
 /** Dashboard reservation search row. */
 export type ReservationSummary = Omit<
   Reservation,
-  'organizationId' | 'createdByUserId'
+  InternalReservationColumns
 > & {
   showtime: Pick<Showtime, 'id' | 'startsAt' | 'locationId'>;
   movieTitle: string;
@@ -289,4 +286,41 @@ export interface OfflinePayment {
   method: 'cash' | 'pos';
   amount: number;
   currency: string;
+}
+
+export interface CheckoutView {
+  authorizationUrl: string;
+  reference: string;
+}
+
+export interface StartCheckoutInput {
+  reservationId: string;
+  amount: number;
+  currency: string;
+  email: string;
+  callbackUrl: string;
+  metadata: Record<string, unknown>;
+}
+
+export type PaymentSettlement =
+  'confirmed' | 'conflict' | 'duplicate' | 'no_op';
+
+export interface RefundInput {
+  paymentId: string;
+  reason: RefundReason;
+  note?: string;
+  userId?: string;
+}
+
+export interface PaystackEvent {
+  event?: string;
+  data?: {
+    id?: number | string;
+    status?: string;
+    reference?: string;
+    transaction_reference?: string;
+    amount?: number | string;
+    currency?: string;
+    paid_at?: string | null;
+  };
 }

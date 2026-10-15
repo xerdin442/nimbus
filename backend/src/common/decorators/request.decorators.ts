@@ -24,19 +24,15 @@ export const CurrentApiKey = createParamDecorator(
     ctx.switchToHttp().getRequest<ApiKeyRequest>().apiKey,
 );
 
+/** Org and mode of an API-key or dashboard request, once its auth guard has run. */
+export const tenantOf = (
+  request: Partial<DashboardRequest & ApiKeyRequest>,
+): TenantContext =>
+  request.apiKey
+    ? { orgId: request.apiKey.orgId, livemode: request.apiKey.livemode }
+    : { orgId: request.membership!.orgId, livemode: request.livemode ?? true };
+
 export const CurrentTenant = createParamDecorator(
-  (_data: unknown, ctx: ExecutionContext): TenantContext => {
-    const request = ctx
-      .switchToHttp()
-      .getRequest<Partial<DashboardRequest & ApiKeyRequest>>();
-
-    if (request.apiKey) {
-      return { orgId: request.apiKey.orgId, livemode: request.apiKey.livemode };
-    }
-
-    return {
-      orgId: request.membership!.orgId,
-      livemode: request.livemode ?? true,
-    };
-  },
+  (_data: unknown, ctx: ExecutionContext): TenantContext =>
+    tenantOf(ctx.switchToHttp().getRequest()),
 );

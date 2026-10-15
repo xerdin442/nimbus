@@ -36,11 +36,11 @@ import type {
   OrgSettingsView,
   SeatCounts,
   SeatMapView,
-  ShowtimeCancelledEvent,
   ShowtimeView,
   TenantContext,
   Transaction,
 } from '@src/common/types';
+import type { ShowtimeCancelledEvent } from '@src/common/types/events';
 import { assertLocationAccess } from '@src/locations/location-access';
 import { OrgSettingsService } from '@src/organizations/org-settings.service';
 import { inventorySeatColumns, isClaimable } from './seat-inventory.service';
@@ -50,8 +50,7 @@ import {
   SeatPricesDto,
   UpdateShowtimeDto,
 } from './dto/showtime.dto';
-
-export const SHOWTIME_CANCELLED = 'showtime.cancelled';
+import { SHOWTIME_CANCELLED } from '@src/common/types/constants';
 
 const MINUTE_MS = 60_000;
 

@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -23,6 +25,7 @@ import { ReservationsService } from '../../reservations.service';
 import {
   BoxOfficeSaleDto,
   ListReservationsQueryDto,
+  RefundReservationDto,
 } from '../../dto/reservation.dto';
 
 @Controller('dashboard/reservations')
@@ -60,5 +63,23 @@ export class DashboardReservationsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.reservations.get(tenant, id, membership);
+  }
+
+  @Post(':id/refund')
+  @HttpCode(HttpStatus.OK)
+  @Dashboard('owner', 'manager')
+  refund(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentMembership() membership: MembershipContext,
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RefundReservationDto,
+  ) {
+    return this.reservations.refund(tenant, id, {
+      reason: 'requested',
+      membership,
+      userId: user.id,
+      note: dto.note,
+    });
   }
 }

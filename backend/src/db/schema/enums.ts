@@ -54,3 +54,22 @@ export const paymentStatusEnum = pgEnum('payment_status', [
   'succeeded',
   'failed',
 ]);
+
+export const refundStatusEnum = pgEnum('refund_status', [
+  'pending',
+  'processing',
+  'needs_attention',
+  'processed',
+  'failed',
+]);
+
+/**
+ * `requested`: staff refunded from the dashboard. The others are automatic: the showtime was
+ * cancelled, a late payment found its seats taken, or a reservation was paid twice.
+ */
+export const refundReasonEnum = pgEnum('refund_reason', [
+  'requested',
+  'showtime_cancelled',
+  'payment_conflict',
+  'duplicate_payment',
+]);

@@ -1,14 +1,14 @@
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Job, Queue } from 'bullmq';
-import { ReservationExpiryProcessor } from '@src/reservations/expiry.processor';
-import { RESERVATIONS_QUEUE } from '@src/reservations/reservations.service';
-import type { ExpireReservationJob } from '@src/common/types';
+import { ReservationsProcessor } from '@src/reservations/reservations.processor';
+import type { ExpireReservationJob } from '@src/common/types/job';
 import {
   eventually,
   useE2eApp,
   type Mode,
   type Session,
 } from './utils/e2e-app';
+import { EXPIRE_JOB, RESERVATIONS_QUEUE } from '@src/common/types/constants';
 
 /**
  * Phase 2 over HTTP: scheduling, seat holds, box office and ticket scanning, against the real
@@ -23,6 +23,7 @@ describe('Booking (e2e)', () => {
     signup,
     joinAs,
     verify,
+    connectPaystack,
     createApiKey,
     location,
   } = useE2eApp();
@@ -53,11 +54,13 @@ describe('Booking (e2e)', () => {
 
   /**
    * A verified org with one location, a 5-seat screen (row A: 3 standard, row B: 2 VIP), a
-   * 100-minute movie in each mode, ads/cleanup of 10 minutes, and keys in both modes.
+   * 100-minute movie in each mode, ads/cleanup of 10 minutes, Paystack and API keys in both modes.
    */
   const setupCinema = async () => {
     const owner = await signup();
     await verify(owner);
+    // Online holds need a working Paystack key in their mode.
+    await connectPaystack(owner, 'test', 'sk_test_good');
 
     await dash('patch', '/organization/settings', owner)
       .send({ adsMinutes: 10, cleanupMinutes: 10 })
@@ -532,9 +535,10 @@ describe('Booking (e2e)', () => {
       ]).expect(201);
       const id = pending.body.data.id as string;
       const job = {
+        name: EXPIRE_JOB,
         data: { orgId: cinema.owner.orgId, livemode: true, reservationId: id },
       } as Job<ExpireReservationJob>;
-      const processor = ctx.app.get(ReservationExpiryProcessor);
+      const processor = ctx.app.get(ReservationsProcessor);
 
       // Too early: the job is a no-op.
       await processor.process(job);

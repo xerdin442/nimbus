@@ -64,6 +64,20 @@
       "when": 1791711372934,
       "tag": "0008_mode_scoped_catalog_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791844693503,
+      "tag": "0009_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791844717776,
+      "tag": "0010_payments_rls",
+      "breakpoints": true
     }
   ]
 }

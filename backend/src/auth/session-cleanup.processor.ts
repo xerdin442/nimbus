@@ -3,12 +3,13 @@ import { and, inArray, isNull, lt, or } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
 import { refreshTokens, sessions } from '@src/db/schema';
 import { Logger } from '@src/common/logger';
+import { AUTH_QUEUE } from '@src/common/types/constants';
 import { REFRESH_TOKEN_TTL_MS } from './sessions.service';
 
 const REVOKED_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 1000;
 
-@Processor('auth')
+@Processor(AUTH_QUEUE)
 export class SessionCleanupProcessor extends WorkerHost {
   private readonly logger = Logger(SessionCleanupProcessor.name);
 

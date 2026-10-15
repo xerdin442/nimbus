@@ -9,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   MaxLength,
   ValidateNested,
@@ -95,6 +96,23 @@ export class BoxOfficeSaleDto extends SeatSelectionDto {
   @ValidateNested()
   @Type(() => BoxOfficeCustomerDto)
   customer?: BoxOfficeCustomerDto;
+}
+
+export class CheckoutDto {
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+    require_tld: false,
+  })
+  @MaxLength(2000)
+  callbackUrl: string;
+}
+
+export class RefundReservationDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
 }
 
 export class ListReservationsQueryDto extends PaginationDto {

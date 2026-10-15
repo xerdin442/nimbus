@@ -19,6 +19,8 @@ export const paymentConfigs = pgTable(
     status: configStatusEnum('status').notNull().default('verified'),
     lastError: text('last_error'),
     verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull(),
+    /** When the key was last rejected: reconnection reconciles payments from around then. */
+    brokenAt: timestamp('broken_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [

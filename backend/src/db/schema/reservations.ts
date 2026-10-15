@@ -13,13 +13,7 @@ import { createdAt, id, livemode, timestamps } from './columns';
 import { organizationId } from './organizations';
 import { users } from './users';
 import { showtimes, showtimeSeats } from './showtimes';
-import {
-  paymentMethodEnum,
-  paymentProviderEnum,
-  paymentStatusEnum,
-  reservationChannelEnum,
-  reservationStatusEnum,
-} from './enums';
+import { reservationChannelEnum, reservationStatusEnum } from './enums';
 
 export const reservations = pgTable(
   'reservations',
@@ -31,6 +25,13 @@ export const reservations = pgTable(
     code: text('code').notNull(),
     /** Same mode as the reservation: see the (showtime_id, livemode) foreign key below. */
     showtimeId: uuid('showtime_id').notNull(),
+    /**
+     * The showtime seats bought or held. Kept after a hold is released, so a payment that lands
+     * after expiry can try to claim the same seats again.
+     */
+    seatIds: uuid('seat_ids').array().notNull().default([]),
+    /** The payment that confirmed it; a second successful payment is refunded as a duplicate. */
+    paymentId: uuid('payment_id'),
     status: reservationStatusEnum('status').notNull().default('pending'),
     channel: reservationChannelEnum('channel').notNull(),
     customerName: text('customer_name'),
@@ -48,6 +49,7 @@ export const reservations = pgTable(
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     expiredAt: timestamp('expired_at', { withTimezone: true }),
+    refundedAt: timestamp('refunded_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -63,28 +65,6 @@ export const reservations = pgTable(
       foreignColumns: [showtimes.id, showtimes.livemode],
     }).onDelete('cascade'),
   ],
-);
-
-/** Per mode. One row per payment attempt; a box-office sale is one succeeded cash/pos row. */
-export const payments = pgTable(
-  'payments',
-  {
-    id: id(),
-    organizationId: organizationId(),
-    livemode: livemode(),
-    reservationId: uuid('reservation_id')
-      .notNull()
-      .references(() => reservations.id, { onDelete: 'cascade' }),
-    /** Null for box-office methods. */
-    provider: paymentProviderEnum('provider'),
-    method: paymentMethodEnum('method').notNull(),
-    reference: text('reference'),
-    amount: integer('amount').notNull(),
-    currency: char('currency', { length: 3 }).notNull(),
-    status: paymentStatusEnum('status').notNull(),
-    ...timestamps,
-  },
-  (table) => [index('payments_reservation_id_idx').on(table.reservationId)],
 );
 
 /** Per mode. Void once the reservation isn't confirmed or the showtime is cancelled. */

@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import { seats, showtimeSeats } from '@src/db/schema';
 import { CodedException } from '@src/common/errors';
 import type { InventorySeat, Transaction } from '@src/common/types';
@@ -34,6 +34,7 @@ export class SeatInventoryService {
   /**
    * Claims every seat or none. One conditional UPDATE: Postgres locks each row, and a concurrent
    * claim re-checks the condition after the first commits, so two requests can't take one seat.
+   * Seats the same reservation already holds count as free (a paid hold becomes sold).
    * Throws 409 seats_unavailable (rolling back the caller's transaction) if any seat isn't free.
    */
   async claim(
@@ -51,7 +52,13 @@ export class SeatInventoryService {
         and(
           eq(showtimeSeats.showtimeId, options.showtimeId),
           inArray(showtimeSeats.id, options.seatIds),
-          isClaimable,
+          or(
+            isClaimable,
+            and(
+              eq(showtimeSeats.status, 'held'),
+              eq(showtimeSeats.reservationId, options.reservationId),
+            ),
+          ),
         ),
       )
       .returning({ id: showtimeSeats.id });
@@ -69,15 +76,22 @@ export class SeatInventoryService {
     return this.describe(tx, options.seatIds);
   }
 
-  /** Frees a reservation's held seats. Sold seats stay sold. */
-  async release(tx: Transaction, reservationId: string): Promise<void> {
+  /**
+   * Frees a reservation's held seats. Sold seats stay
+   * sold unless a refund puts them back on sale.
+   */
+  async release(
+    tx: Transaction,
+    reservationId: string,
+    { sold = false } = {},
+  ): Promise<void> {
     await tx
       .update(showtimeSeats)
       .set({ status: 'available', reservationId: null, heldUntil: null })
       .where(
         and(
           eq(showtimeSeats.reservationId, reservationId),
-          eq(showtimeSeats.status, 'held'),
+          sold ? undefined : eq(showtimeSeats.status, 'held'),
         ),
       );
   }

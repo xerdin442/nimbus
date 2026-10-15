@@ -1,12 +1,13 @@
 import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Queue } from 'bullmq';
 import { and, count, desc, eq, inArray, lte, sql, type SQL } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
 import { movies, organizations, reservations, showtimes } from '@src/db/schema';
 import type {
   NewReservation,
+  RefundReason,
   Reservation,
   SeatPrices,
 } from '@src/db/schema/types';
@@ -14,34 +15,43 @@ import { CodedException } from '@src/common/errors';
 import { Logger } from '@src/common/logger';
 import { randomCode } from '@src/common/util';
 import type {
-  ExpireReservationJob,
+  CheckoutView,
   InventorySeat,
   MembershipContext,
   PaginatedResult,
+  PaymentSettlement,
+  RefundView,
   ReservationSummary,
   ReservationView,
-  ShowtimeCancelledEvent,
   TenantContext,
   TicketView,
   Transaction,
 } from '@src/common/types';
+import type { ReservationEvent } from '@src/common/types/events';
+import type {
+  ExpireReservationJob,
+  RefundReservationJob,
+} from '@src/common/types/job';
 import { assertLocationAccess } from '@src/locations/location-access';
 import { OrgSettingsService } from '@src/organizations/org-settings.service';
-import {
-  SHOWTIME_CANCELLED,
-  ShowtimesService,
-} from '@src/showtimes/showtimes.service';
+import { ShowtimesService } from '@src/showtimes/showtimes.service';
 import { SeatInventoryService } from '@src/showtimes/seat-inventory.service';
 import { TicketsService } from '@src/tickets/tickets.service';
 import { PaymentsService } from '@src/payments/payments.service';
 import {
   BoxOfficeSaleDto,
+  CheckoutDto,
   CreateReservationDto,
   ListReservationsQueryDto,
 } from './dto/reservation.dto';
-
-export const RESERVATIONS_QUEUE = 'reservations';
-export const EXPIRE_JOB = 'expire';
+import {
+  EXPIRE_JOB,
+  REFUND_JOB,
+  RESERVATIONS_QUEUE,
+  RESERVATION_CONFIRMED,
+  RESERVATION_PAYMENT_CONFLICT,
+  RESERVATION_REFUNDED,
+} from '@src/common/types/constants';
 
 const MINUTE_MS = 60_000;
 const RESERVATION_CODE_LENGTH = 8;
@@ -57,6 +67,7 @@ export class ReservationsService {
     private readonly tickets: TicketsService,
     private readonly payments: PaymentsService,
     private readonly settings: OrgSettingsService,
+    private readonly events: EventEmitter2,
     @InjectQueue(RESERVATIONS_QUEUE) private readonly queue: Queue,
   ) {}
 
@@ -76,6 +87,7 @@ export class ReservationsService {
         showtimeId: showtime.id,
         status: 'pending',
         channel: 'api',
+        seatIds: dto.seatIds,
         customerName: dto.customer.name,
         customerEmail: dto.customer.email,
         customerPhone: dto.customer.phone,
@@ -96,11 +108,56 @@ export class ReservationsService {
         await this.setTotal(tx, reservation, seats),
         seats,
         [],
+        null,
       );
     });
 
     await this.scheduleExpiry(ctx, view.id, view.expiresAt!);
     return view;
+  }
+
+  /**
+   * Starts paying for a pending reservation: a Paystack transaction
+   * with the org's key for the request's mode.
+   */
+  async checkout(
+    ctx: TenantContext,
+    id: string,
+    dto: CheckoutDto,
+  ): Promise<CheckoutView> {
+    const [reservation] = await this.db.withTenant(ctx, (tx) =>
+      tx.select().from(reservations).where(eq(reservations.id, id)),
+    );
+
+    if (!reservation) {
+      throw new NotFoundException('Reservation not found');
+    }
+    if (
+      reservation.status !== 'pending' ||
+      reservation.expiresAt!.getTime() <= Date.now()
+    ) {
+      throw new CodedException(
+        HttpStatus.CONFLICT,
+        'reservation_not_payable',
+        reservation.status === 'pending'
+          ? 'The hold on these seats has expired; create a new reservation'
+          : `This reservation is ${reservation.status}`,
+      );
+    }
+
+    return this.payments.startCheckout(ctx, {
+      reservationId: reservation.id,
+      amount: reservation.total,
+      currency: reservation.currency,
+      email: reservation.customerEmail!,
+      callbackUrl: dto.callbackUrl,
+      metadata: {
+        orgId: ctx.orgId,
+        livemode: ctx.livemode,
+        reservationId: reservation.id,
+        reservationCode: reservation.code,
+      },
+    });
   }
 
   /**
@@ -124,6 +181,7 @@ export class ReservationsService {
         showtimeId: showtime.id,
         status: 'confirmed',
         channel: 'box_office',
+        seatIds: dto.seatIds,
         customerName: dto.customer?.name,
         customerEmail: dto.customer?.email,
         customerPhone: dto.customer?.phone,
@@ -138,17 +196,22 @@ export class ReservationsService {
         status: 'sold',
       });
       const seats = this.priced(claimed, showtime.prices);
-      const confirmed = await this.setTotal(tx, reservation, seats);
+      const priced = await this.setTotal(tx, reservation, seats);
 
-      await this.payments.recordOffline(tx, ctx, {
-        reservationId: confirmed.id,
+      const payment = await this.payments.recordOffline(tx, ctx, {
+        reservationId: priced.id,
         method: dto.method,
-        amount: confirmed.total,
-        currency: confirmed.currency,
+        amount: priced.total,
+        currency: priced.currency,
       });
+      const [confirmed] = await tx
+        .update(reservations)
+        .set({ paymentId: payment.id })
+        .where(eq(reservations.id, priced.id))
+        .returning();
       const tickets = await this.tickets.issue(tx, ctx, confirmed.id, claimed);
 
-      return this.toView(confirmed, seats, tickets);
+      return this.toView(confirmed, seats, tickets, null);
     });
   }
 
@@ -179,6 +242,7 @@ export class ReservationsService {
         row.reservation,
         this.priced(await this.inventory.forReservation(tx, id), row.prices),
         await this.tickets.forReservation(tx, id),
+        await this.payments.refundFor(tx, row.reservation),
       );
     });
   }
@@ -216,8 +280,8 @@ export class ReservationsService {
   }
 
   /**
-   * Expiry job: `pending` → `expired` and the hold is released. A no-op if the reservation
-   * was paid or cancelled first, or (defensively) if it isn't due yet.
+   * Expiry job: `pending` → `expired` and the hold is released. A no-op if the
+   * reservation was paid or cancelled first, or (defensively) if it isn't due yet.
    */
   async expire(ctx: TenantContext, id: string): Promise<boolean> {
     return this.db.withTenant(ctx, async (tx) => {
@@ -238,6 +302,196 @@ export class ReservationsService {
       }
       return Boolean(expired);
     });
+  }
+
+  /**
+   * Full refund of a confirmed reservation: the payment is refunded;
+   * Paystack for online, recorded for cash/POS, the reservation becomes
+   * `refunded` (its tickets scan `void`) and its seats go back on sale.
+   */
+  async refund(
+    ctx: TenantContext,
+    id: string,
+    options: {
+      reason: RefundReason;
+      membership?: MembershipContext;
+      userId?: string;
+      note?: string;
+    },
+  ): Promise<ReservationView> {
+    const refunded = await this.db.withTenant(ctx, async (tx) => {
+      const [row] = await tx
+        .select({ reservation: reservations, locationId: showtimes.locationId })
+        .from(reservations)
+        .innerJoin(showtimes, eq(showtimes.id, reservations.showtimeId))
+        .where(eq(reservations.id, id))
+        .for('update', { of: reservations });
+
+      if (!row) {
+        throw new NotFoundException('Reservation not found');
+      }
+      if (options.membership) {
+        assertLocationAccess(options.membership, row.locationId);
+      }
+
+      const { reservation } = row;
+      const retry =
+        reservation.status === 'refunded' &&
+        (await this.payments.refundFor(tx, reservation))?.status === 'failed';
+
+      if (
+        (reservation.status !== 'confirmed' && !retry) ||
+        !reservation.paymentId
+      ) {
+        throw new CodedException(
+          HttpStatus.CONFLICT,
+          'reservation_not_refundable',
+          reservation.status === 'refunded'
+            ? 'This reservation is already refunded'
+            : `Only confirmed reservations can be refunded; this one is ${reservation.status}`,
+        );
+      }
+
+      await this.payments.refund(
+        ctx,
+        {
+          paymentId: reservation.paymentId,
+          reason: options.reason,
+          note: options.note,
+          userId: options.userId,
+        },
+        tx,
+      );
+
+      if (retry) return false;
+
+      await this.inventory.release(tx, id, { sold: true });
+      await tx
+        .update(reservations)
+        .set({ status: 'refunded', refundedAt: new Date() })
+        .where(eq(reservations.id, id));
+      return true;
+    });
+
+    if (refunded) {
+      await this.emit(RESERVATION_REFUNDED, ctx, id);
+    }
+    return this.get(ctx, id);
+  }
+
+  async refundAutomatically(
+    ctx: TenantContext,
+    id: string,
+    reason: RefundReason,
+  ): Promise<void> {
+    const [reservation] = await this.db.withTenant(ctx, (tx) =>
+      tx
+        .select({ status: reservations.status })
+        .from(reservations)
+        .where(eq(reservations.id, id)),
+    );
+    if (reservation?.status !== 'confirmed') return;
+
+    await this.refund(ctx, id, { reason });
+  }
+
+  /**
+   * A payment succeeded (webhook or reconciliation). `pending` → `confirmed`: held seats
+   * become sold and tickets are issued. A late payment (expired or cancelled) is confirmed too
+   * if its seats can still be claimed and the showtime hasn't ended; otherwise, it is refunded.
+   * Idempotent: a payment already applied is a no-op, so the webhook job can retry.
+   */
+  async settlePayment(
+    ctx: TenantContext,
+    reservationId: string,
+    paymentId: string,
+  ): Promise<void> {
+    const settlement = await this.db.withTenant(
+      ctx,
+      async (tx): Promise<PaymentSettlement> => {
+        const [reservation] = await tx
+          .select()
+          .from(reservations)
+          .where(eq(reservations.id, reservationId))
+          .for('update');
+
+        if (!reservation || reservation.paymentId === paymentId) {
+          return 'no_op';
+        }
+        if (
+          reservation.status === 'confirmed' ||
+          reservation.status === 'refunded'
+        ) {
+          return 'duplicate';
+        }
+
+        const showtime = await this.showtimes.loadForBooking(
+          tx,
+          reservation.showtimeId,
+        );
+        if (
+          showtime.status !== 'published' ||
+          showtime.endsAt.getTime() <= Date.now()
+        ) {
+          return 'conflict';
+        }
+
+        // A savepoint: a failed claim rolls back only itself.
+        const claimed = await tx
+          .transaction((sp) =>
+            this.inventory.claim(sp, {
+              showtimeId: reservation.showtimeId,
+              seatIds: reservation.seatIds,
+              reservationId: reservation.id,
+              status: 'sold',
+            }),
+          )
+          .catch((error: unknown) => {
+            if (
+              error instanceof CodedException &&
+              error.code === 'seats_unavailable'
+            ) {
+              return null;
+            }
+            throw error;
+          });
+
+        if (!claimed) {
+          return 'conflict';
+        }
+
+        await tx
+          .update(reservations)
+          .set({
+            status: 'confirmed',
+            confirmedAt: new Date(),
+            paymentId: paymentId,
+          })
+          .where(eq(reservations.id, reservation.id));
+        await this.tickets.issue(tx, ctx, reservation.id, claimed);
+        return 'confirmed';
+      },
+    );
+
+    switch (settlement) {
+      case 'confirmed':
+        await this.emit(RESERVATION_CONFIRMED, ctx, reservationId);
+        break;
+      case 'conflict':
+      case 'duplicate': {
+        const { created } = await this.payments.refund(ctx, {
+          paymentId: paymentId,
+          reason:
+            settlement === 'conflict'
+              ? 'payment_conflict'
+              : 'duplicate_payment',
+        });
+        if (created && settlement === 'conflict') {
+          await this.emit(RESERVATION_PAYMENT_CONFLICT, ctx, reservationId);
+        }
+        break;
+      }
+    }
   }
 
   async list(
@@ -292,7 +546,8 @@ export class ReservationsService {
     return {
       data: rows.map((row) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { organizationId, createdByUserId, ...rest } = row.reservation;
+        const { organizationId, createdByUserId, seatIds, paymentId, ...rest } =
+          row.reservation;
         return { ...rest, showtime: row.showtime, movieTitle: row.movieTitle };
       }),
       meta: {
@@ -306,32 +561,56 @@ export class ReservationsService {
     };
   }
 
-  /** A cancelled showtime sells nothing: its pending holds are cancelled. */
-  @OnEvent(SHOWTIME_CANCELLED)
-  async onShowtimeCancelled(event: ShowtimeCancelledEvent): Promise<void> {
-    const ctx = { orgId: event.orgId, livemode: event.livemode };
-    try {
-      await this.db.withTenant(ctx, async (tx) => {
-        const cancelled = await tx
-          .update(reservations)
-          .set({ status: 'cancelled', cancelledAt: new Date() })
-          .where(
-            and(
-              eq(reservations.showtimeId, event.showtimeId),
-              eq(reservations.status, 'pending'),
-            ),
-          )
-          .returning({ id: reservations.id });
+  /**
+   * A cancelled showtime sells nothing: its pending holds are cancelled, and online
+   * sales are refunded automatically after Paystack confirmation. Box-office sales
+   * stay confirmed, their tickets void, for staff to refund at the counter.
+   */
+  async closeCancelledShowtime(
+    ctx: TenantContext,
+    showtimeId: string,
+  ): Promise<void> {
+    const paid = await this.db.withTenant(ctx, async (tx) => {
+      const cancelled = await tx
+        .update(reservations)
+        .set({ status: 'cancelled', cancelledAt: new Date() })
+        .where(
+          and(
+            eq(reservations.showtimeId, showtimeId),
+            eq(reservations.status, 'pending'),
+          ),
+        )
+        .returning({ id: reservations.id });
 
-        for (const { id } of cancelled) {
-          await this.inventory.release(tx, id);
-        }
+      for (const { id } of cancelled) {
+        await this.inventory.release(tx, id);
+      }
+
+      return tx
+        .select({ id: reservations.id })
+        .from(reservations)
+        .where(
+          and(
+            eq(reservations.showtimeId, showtimeId),
+            eq(reservations.status, 'confirmed'),
+            eq(reservations.channel, 'api'),
+          ),
+        );
+    });
+
+    for (const { id } of paid) {
+      const job: RefundReservationJob = {
+        ...ctx,
+        reservationId: id,
+        reason: 'showtime_cancelled',
+      };
+      await this.queue.add(REFUND_JOB, job, {
+        jobId: `refund-${id}`,
+        attempts: 8,
+        backoff: { type: 'exponential', delay: 30_000 },
+        removeOnComplete: true,
+        removeOnFail: 1000,
       });
-    } catch (error) {
-      // Leftover holds still lapse at their expiry; nothing can be booked on a cancelled showtime.
-      this.logger.error(
-        `Failed to cancel holds for showtime ${event.showtimeId}: ${String(error)}`,
-      );
     }
   }
 
@@ -405,14 +684,21 @@ export class ReservationsService {
     }
   }
 
+  private async emit(name: string, ctx: TenantContext, reservationId: string) {
+    const event: ReservationEvent = { ...ctx, reservationId };
+    await this.events.emitAsync(name, event);
+  }
+
   private toView(
     reservation: Reservation,
     seats: (InventorySeat & { price: number })[],
     tickets: TicketView[],
+    refund: RefundView | null,
   ): ReservationView {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { organizationId, createdByUserId, ...rest } = reservation;
-    return { ...rest, seats, tickets };
+    const { organizationId, createdByUserId, seatIds, paymentId, ...rest } =
+      reservation;
+    return { ...rest, seats, tickets, refund };
   }
 
   private priced(seats: InventorySeat[], prices: SeatPrices) {
