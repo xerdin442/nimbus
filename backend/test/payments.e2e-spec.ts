@@ -19,6 +19,7 @@ describe('Payments (e2e)', () => {
     joinAs,
     verify,
     connectPaystack,
+    verifyWebhook,
     paystackWebhook,
     createApiKey,
     location,
@@ -42,6 +43,7 @@ describe('Payments (e2e)', () => {
     await verify(owner);
     const testKey = `sk_test_${seq()}good`;
     await connectPaystack(owner, 'test', testKey);
+    await verifyWebhook(owner, 'test', testKey);
 
     const locationId = (
       await dash('post', '/locations', owner)
@@ -550,9 +552,8 @@ describe('Payments (e2e)', () => {
 
       await eventuallyStatus(cinema, id, 'confirmed');
       expect(
-        (await dash('get', '/payment-config', cinema.owner, 'test')).body.data
-          .status,
-      ).toBe('verified');
+        (await dash('get', '/payment-config', cinema.owner, 'test')).body.data,
+      ).toMatchObject({ status: 'verified', isWebhookVerified: false });
     });
   });
 

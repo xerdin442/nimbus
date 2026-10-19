@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { id, livemode, timestamps } from './columns';
 import { organizationId } from './organizations';
 import {
@@ -21,6 +27,13 @@ export const paymentConfigs = pgTable(
     verifiedAt: timestamp('verified_at', { withTimezone: true }).notNull(),
     /** When the key was last rejected: reconnection reconciles payments from around then. */
     brokenAt: timestamp('broken_at', { withTimezone: true }),
+    /**
+     * The webhook URL lives on the Paystack dashboard, invisible to the API — so the org proves
+     * it works by initiating a verification payment that arrives on the webhook (per mode; each
+     * `(re)connect` resets this). Online payments are blocked until it is true.
+     */
+    isWebhookVerified: boolean('is_webhook_verified').notNull().default(false),
+    webhookVerifiedAt: timestamp('webhook_verified_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [

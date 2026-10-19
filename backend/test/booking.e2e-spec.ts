@@ -24,6 +24,7 @@ describe('Booking (e2e)', () => {
     joinAs,
     verify,
     connectPaystack,
+    verifyWebhook,
     createApiKey,
     location,
   } = useE2eApp();
@@ -59,8 +60,10 @@ describe('Booking (e2e)', () => {
   const setupCinema = async () => {
     const owner = await signup();
     await verify(owner);
-    // Online holds need a working Paystack key in their mode.
+    // Online holds need a working Paystack key with a verified webhook in their mode.
     await connectPaystack(owner, 'test', 'sk_test_good');
+    await verifyWebhook(owner, 'test', 'sk_test_good');
+    await verifyWebhook(owner, 'live', 'sk_live_good');
 
     await dash('patch', '/organization/settings', owner)
       .send({ adsMinutes: 10, cleanupMinutes: 10 })

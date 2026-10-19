@@ -29,6 +29,17 @@ import type {
 export type Database = NodePgDatabase<typeof schema>;
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+/** Currencies Paystack settles in. */
+export const SUPPORTED_CURRENCIES = [
+  'NGN',
+  'GHS',
+  'ZAR',
+  'KES',
+  'USD',
+] as const;
+
+export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
+
 export interface PaginatedResult<T> {
   data: T[];
   meta: {
@@ -291,6 +302,14 @@ export interface OfflinePayment {
 export interface CheckoutView {
   authorizationUrl: string;
   reference: string;
+}
+
+export interface WebhookVerificationView {
+  status: 'started' | 'already_verified';
+  reference: string | null;
+  authorizationUrl: string | null;
+  amount: number | null;
+  currency: string | null;
 }
 
 export interface StartCheckoutInput {

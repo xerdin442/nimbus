@@ -1,3 +1,4 @@
+import { type Currency, SUPPORTED_CURRENCIES } from '@src/common/types';
 import {
   IsEmail,
   IsIn,
@@ -11,15 +12,6 @@ import {
   Min,
 } from 'class-validator';
 
-/** Currencies Paystack settles in. */
-export const SUPPORTED_CURRENCIES = [
-  'NGN',
-  'GHS',
-  'ZAR',
-  'KES',
-  'USD',
-] as const;
-
 export class CreateOrganizationDto {
   @IsString()
   @IsNotEmpty()
@@ -30,7 +22,7 @@ export class CreateOrganizationDto {
   country: string;
 
   @IsIn(SUPPORTED_CURRENCIES)
-  currency: (typeof SUPPORTED_CURRENCIES)[number];
+  currency: Currency;
 }
 
 export class UpdateOrganizationDto {

@@ -42,11 +42,16 @@ export const reservationChannelEnum = pgEnum('reservation_channel', [
   'box_office',
 ]);
 
-/** `online` goes through a payment provider; `cash` and `pos` are box-office methods. */
+/**
+ * `online` goes through a payment provider; `cash` and `pos` are box-office methods.
+ * `verification` is a webhook-verification payment the org pays to prove its Paystack
+ * webhook URL works.
+ */
 export const paymentMethodEnum = pgEnum('payment_method', [
   'online',
   'cash',
   'pos',
+  'verification',
 ]);
 
 export const paymentStatusEnum = pgEnum('payment_status', [

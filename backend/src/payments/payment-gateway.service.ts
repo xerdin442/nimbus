@@ -17,8 +17,19 @@ import {
 
 const STATUS_CACHE_SECONDS = 5;
 
+export type PaymentReadiness = 'none' | 'broken' | 'awaiting_webhook' | 'ready';
+
 const statusKey = (ctx: TenantContext) =>
   `payment-config-status:${ctx.orgId}:${ctx.livemode ? 'live' : 'test'}`;
+
+const toReadiness = (
+  status: ConfigStatus | null,
+  isWebhookVerified: boolean | undefined,
+): PaymentReadiness => {
+  if (!status) return 'none';
+  if (status === 'broken') return 'broken';
+  return isWebhookVerified ? 'ready' : 'awaiting_webhook';
+};
 
 const unavailable = (message: string) =>
   new CodedException(
@@ -48,35 +59,52 @@ export class PaymentGatewayService {
     return this.paystack;
   }
 
-  /** The config's status for the mode (`null`: not connected), cached for a few seconds. */
-  async status(ctx: TenantContext): Promise<ConfigStatus | null> {
+  /**
+   * Payment readiness for the mode (`none`: not connected), cached for a few seconds.
+   * A config whose webhook was never verified must still count as not available for payments.
+   */
+  async status(ctx: TenantContext): Promise<PaymentReadiness> {
     const cached = await this.redis.get(statusKey(ctx));
-    if (cached) {
-      return cached === 'none' ? null : (cached as ConfigStatus);
-    }
+    if (cached) return cached as PaymentReadiness;
 
     const [config] = await this.db.withTenant(ctx, (tx) =>
-      tx.select({ status: paymentConfigs.status }).from(paymentConfigs),
+      tx
+        .select({
+          status: paymentConfigs.status,
+          isWebhookVerified: paymentConfigs.isWebhookVerified,
+        })
+        .from(paymentConfigs),
     );
-    const status = config?.status ?? null;
 
-    await this.redis.set(statusKey(ctx), status ?? 'none', {
+    const readiness = toReadiness(
+      config?.status ?? null,
+      config?.isWebhookVerified,
+    );
+
+    await this.redis.set(statusKey(ctx), readiness, {
       expiration: { type: 'EX', value: STATUS_CACHE_SECONDS },
     });
-    return status;
+    return readiness;
   }
 
-  /** 503 payment_provider_unavailable unless online payments can be taken in this mode. */
+  /** 503 unless online payments can be *initiated* in this mode. */
   async assertAvailable(ctx: TenantContext): Promise<void> {
-    const status = await this.status(ctx);
+    const readiness = await this.status(ctx);
 
-    if (!status) {
+    if (readiness === 'none') {
       throw unavailable(
         `Online payments are not set up in ${ctx.livemode ? 'live' : 'test'} mode`,
       );
     }
-    if (status === 'broken') {
+    if (readiness === 'broken') {
       throw unavailable('Online booking is temporarily unavailable');
+    }
+    if (readiness === 'awaiting_webhook') {
+      throw new CodedException(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        'payment_webhook_not_verified',
+        'Online payments cannot start until webhook verification is complete',
+      );
     }
   }
 

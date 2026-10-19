@@ -25,9 +25,10 @@ export const payments = pgTable(
     id: id(),
     organizationId: organizationId(),
     livemode: livemode(),
-    reservationId: uuid('reservation_id')
-      .notNull()
-      .references(() => reservations.id, { onDelete: 'cascade' }),
+    /** Null for verification payments, online/cash/pos payments always have one. */
+    reservationId: uuid('reservation_id').references(() => reservations.id, {
+      onDelete: 'cascade',
+    }),
     /** Null for box-office methods. */
     provider: paymentProviderEnum('provider'),
     method: paymentMethodEnum('method').notNull(),

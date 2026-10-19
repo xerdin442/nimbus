@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { Dashboard } from '@src/common/decorators/auth.decorators';
 import { CurrentTenant } from '@src/common/decorators/request.decorators';
 import type { TenantContext } from '@src/common/types';
@@ -21,5 +29,11 @@ export class DashboardPaymentConfigController {
     @Body() dto: ConnectPaymentConfigDto,
   ) {
     return this.paymentConfig.connect(tenant, dto.secretKey);
+  }
+
+  @Post('webhooks/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyWebhook(@CurrentTenant() tenant: TenantContext) {
+    return this.paymentConfig.verifyWebhook(tenant);
   }
 }

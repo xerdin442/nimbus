@@ -119,14 +119,18 @@ export class PaymentWebhooksService {
     const { data } = event.payload as PaystackEvent;
 
     if (event.eventType === 'charge.success' && data?.status === 'success') {
-      await this.payments.confirmCharge(ctx, {
-        status: 'success',
-        transactionId: String(data.id),
-        reference: data.reference!,
-        amount: Number(data.amount),
-        currency: data.currency!,
-        paidAt: data.paid_at ? new Date(data.paid_at) : null,
-      });
+      await this.payments.confirmCharge(
+        ctx,
+        {
+          status: 'success',
+          transactionId: String(data.id),
+          reference: data.reference!,
+          amount: Number(data.amount),
+          currency: data.currency!,
+          paidAt: data.paid_at ? new Date(data.paid_at) : null,
+        },
+        true,
+      );
     } else if (event.eventType.startsWith('refund.')) {
       await this.payments.applyRefundStatus(
         ctx,

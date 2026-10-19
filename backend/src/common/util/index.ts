@@ -1,6 +1,7 @@
 import { randomBytes, randomInt } from 'crypto';
 import { ThrottlerModuleOptions, ThrottlerOptions } from '@nestjs/throttler';
 import { Secrets } from '@src/common/secrets';
+import type { Currency } from '@src/common/types';
 
 export const randomAlphanumeric = (length: number): string => {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -26,6 +27,15 @@ export const randomCode = (length: number): string =>
 
 export const THROTTLER_SECONDS = 'Seconds';
 export const THROTTLER_MINUTES = 'Minutes';
+
+/** The webhook-verification payment per currency, in minor units */
+export const VERIFICATION_AMOUNTS: Record<Currency, number> = {
+  NGN: 50_000,
+  GHS: 1_000,
+  ZAR: 1_000,
+  KES: 10_000,
+  USD: 100,
+};
 
 export const applyThrottlerConfig = (): ThrottlerModuleOptions => {
   const throttles: ThrottlerOptions[] = [

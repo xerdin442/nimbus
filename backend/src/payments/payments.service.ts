@@ -1,8 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { and, desc, eq, gte } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
-import { payments, refunds } from '@src/db/schema';
+import { paymentConfigs, payments, refunds } from '@src/db/schema';
 import type { Payment, Refund, RefundStatus } from '@src/db/schema/types';
 import { CodedException } from '@src/common/errors';
 import { Logger } from '@src/common/logger';
@@ -108,10 +108,15 @@ export class PaymentsService {
    * A transaction the provider reports as paid (signed webhook or verify). Marks the payment
    * succeeded, then tells reservations, which confirms, or refunds a late or duplicate payment.
    * Safe to repeat: an already-succeeded payment is announced again, and the listener is idempotent.
+   *
+   * A verification payment belongs to no reservation: instead of the event,
+   * a webhook-sourced confirmation flips the mode's payment-config webhook flag.
+   * Reconcile path only marks the money, it never flips the verification status.
    */
   async confirmCharge(
     ctx: TenantContext,
     transaction: ProviderTransaction,
+    viaWebhook = false,
   ): Promise<void> {
     const payment = await this.db.withTenant(ctx, async (tx) => {
       const [found] = await tx
@@ -151,15 +156,32 @@ export class PaymentsService {
         })
         .where(eq(payments.id, found.id))
         .returning();
+
+      if (paid.method === 'verification' && viaWebhook) {
+        await tx
+          .update(paymentConfigs)
+          .set({ isWebhookVerified: true, webhookVerifiedAt: new Date() })
+          .where(
+            and(
+              eq(paymentConfigs.organizationId, ctx.orgId),
+              eq(paymentConfigs.livemode, ctx.livemode),
+            ),
+          );
+      }
       return paid;
     });
 
     if (!payment) return;
 
+    if (payment.method === 'verification') {
+      await this.gateway.invalidate(ctx);
+      return;
+    }
+
     const event: PaymentSucceededEvent = {
       ...ctx,
       paymentId: payment.id,
-      reservationId: payment.reservationId,
+      reservationId: payment.reservationId!,
     };
     await this.events.emitAsync(PAYMENT_SUCCEEDED, event);
   }
@@ -182,7 +204,7 @@ export class PaymentsService {
         .where(eq(payments.id, input.paymentId))
         .for('update');
 
-      if (payment?.status !== 'succeeded') {
+      if (payment?.status !== 'succeeded' || !payment.reservationId) {
         throw new CodedException(
           HttpStatus.CONFLICT,
           'payment_not_refundable',
@@ -287,7 +309,7 @@ export class PaymentsService {
         .from(payments)
         .where(
           and(
-            eq(payments.method, 'online'),
+            inArray(payments.method, ['online', 'verification']),
             eq(payments.status, 'pending'),
             gte(payments.createdAt, since),
           ),

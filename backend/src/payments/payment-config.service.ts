@@ -1,13 +1,21 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
+import { eq } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
-import { paymentConfigs } from '@src/db/schema';
+import { organizations, paymentConfigs, payments } from '@src/db/schema';
 import type { PaymentConfig } from '@src/db/schema/types';
-import type { PaymentConfigView, TenantContext } from '@src/common/types';
+import type {
+  Currency,
+  PaymentConfigView,
+  TenantContext,
+  WebhookVerificationView,
+} from '@src/common/types';
 import type { ReconcilePaymentsJob } from '@src/common/types/job';
 import { EncryptionService } from '@src/common/helpers';
 import { CodedException } from '@src/common/errors';
+import { randomAlphanumeric, VERIFICATION_AMOUNTS } from '@src/common/util';
+import { Secrets } from '@src/common/secrets';
 import { Logger } from '@src/common/logger';
 import { OrgVerificationService } from '@src/organizations/org-verification.service';
 import { PaystackProvider } from './providers/paystack.provider';
@@ -17,6 +25,9 @@ import { PAYMENTS_QUEUE, RECONCILE_JOB } from '@src/common/types/constants';
 
 /** Payments started this long before a key broke may have been paid while it was broken. */
 const RECONCILE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+
+/** Where Paystack sends the browser after the verification payment. */
+const WEBHOOK_CALLBACK_PATH = '/settings/payments';
 
 @Injectable()
 export class PaymentConfigService {
@@ -80,6 +91,10 @@ export class PaymentConfigService {
       lastError: null,
       verifiedAt: new Date(),
       brokenAt: null,
+      // The webhook URL setting lives on the Paystack account, which Nimbus cannot inspect:
+      // a new key must prove it again with a fresh verification payment.
+      isWebhookVerified: false,
+      webhookVerifiedAt: null,
     };
 
     const result = await this.db.withTenant(ctx, async (tx) => {
@@ -117,6 +132,94 @@ export class PaymentConfigService {
     }
 
     return { config: result.config, isVerified: result.isVerified };
+  }
+
+  async verifyWebhook(ctx: TenantContext): Promise<WebhookVerificationView> {
+    const [config] = await this.db.withTenant(ctx, (tx) =>
+      tx
+        .select({
+          status: paymentConfigs.status,
+          isWebhookVerified: paymentConfigs.isWebhookVerified,
+        })
+        .from(paymentConfigs),
+    );
+
+    if (!config || config.status !== 'verified') {
+      throw new CodedException(
+        HttpStatus.CONFLICT,
+        'payment_config_not_verified',
+        `The ${ctx.livemode ? 'live' : 'test'} payment config must be connected first`,
+      );
+    }
+    if (config.isWebhookVerified) {
+      return {
+        status: 'already_verified',
+        reference: null,
+        authorizationUrl: null,
+        amount: null,
+        currency: null,
+      };
+    }
+
+    const [org] = await this.db.withTenant(ctx, (tx) =>
+      tx
+        .select({
+          currency: organizations.currency,
+          notificationEmail: organizations.notificationEmail,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, ctx.orgId)),
+    );
+    const amount = VERIFICATION_AMOUNTS[org.currency as Currency];
+    const reference = `nmb-${randomAlphanumeric(24)}`;
+
+    const [payment] = await this.db.withTenant(ctx, (tx) =>
+      tx
+        .insert(payments)
+        .values({
+          organizationId: ctx.orgId,
+          livemode: ctx.livemode,
+          provider: 'paystack',
+          method: 'verification',
+          reference,
+          amount,
+          currency: org.currency,
+          status: 'pending',
+        })
+        .returning({ id: payments.id }),
+    );
+
+    try {
+      return this.gateway.withSecret(ctx, async (provider, secretKey) => {
+        const { authorizationUrl } = await provider.initialize(secretKey, {
+          email: org.notificationEmail,
+          amount,
+          currency: org.currency,
+          reference,
+          callbackUrl: `${Secrets.DASHBOARD_URL}${WEBHOOK_CALLBACK_PATH}`,
+          metadata: {
+            purpose: 'webhook_verification',
+            orgId: ctx.orgId,
+            livemode: ctx.livemode,
+          },
+        });
+        return {
+          status: 'started',
+          reference,
+          authorizationUrl,
+          amount,
+          currency: org.currency,
+        };
+      });
+    } catch (error) {
+      await this.db.withTenant(ctx, (tx) =>
+        tx
+          .update(payments)
+          .set({ status: 'failed' })
+          .where(eq(payments.id, payment.id)),
+      );
+      throw error;
+    }
   }
 
   private async reconcile(ctx: TenantContext, brokenAt: Date | null) {

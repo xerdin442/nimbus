@@ -324,6 +324,48 @@ export function useE2eApp() {
       .send({ secretKey })
       .expect(200);
 
+  /**
+   * Runs the webhook-verification flow for `mode`: pays the verification payment the verify
+   * endpoint starts and delivers its signed `charge.success` webhook, so the org's config ends
+   * webhook-verified (skipped when it already is — `started` is `already_verified` then).
+   */
+  const verifyWebhook = async (
+    session: Session,
+    mode: Mode,
+    secretKey: string,
+  ) => {
+    const { data } = (
+      await dash(
+        'post',
+        '/payment-config/webhooks/verify',
+        session,
+        mode,
+      ).expect(200)
+    ).body as { data: { status: string; reference: string | null } };
+
+    if (!data.reference) return;
+
+    const transaction = paystack.transactions.get(data.reference)!;
+    await paystackWebhook(session.orgId, mode, secretKey, {
+      event: 'charge.success',
+      data: {
+        id: 9_000_000_000 + paystack.transactions.size,
+        status: 'success',
+        reference: data.reference,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        paid_at: new Date().toISOString(),
+      },
+    }).expect(200);
+
+    await eventually(async () => {
+      const config = await dash('get', '/payment-config', session, mode).expect(
+        200,
+      );
+      expect(config.body.data.isWebhookVerified).toBe(true);
+    });
+  };
+
   /** POST a Paystack webhook signed with `secretKey`, as Paystack would. */
   const paystackWebhook = (
     orgId: string,
@@ -371,6 +413,7 @@ export function useE2eApp() {
     joinAs,
     verify,
     connectPaystack,
+    verifyWebhook,
     paystackWebhook,
     createApiKey,
     location,
