@@ -4,6 +4,7 @@ import {
   NotFoundException,
   StreamableFile,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import * as QRCode from 'qrcode';
 import { DbService } from '@src/db/db.service';
@@ -28,7 +29,10 @@ import type {
   Transaction,
 } from '@src/common/types';
 import { randomCode } from '@src/common/util';
+import { Logger } from '@src/common/logger';
 import { assertLocationAccess } from '@src/locations/location-access';
+import { TICKET_CHECKED_IN } from '@src/common/types/constants';
+import type { TicketCheckedInEvent } from '@src/common/types/events';
 import { signTicketToken, verifyTicketToken } from './ticket-token';
 import { scanTiming } from './scan-window';
 import { ScanTicketDto } from './dto/scan.dto';
@@ -37,7 +41,12 @@ const TICKET_CODE_LENGTH = 10;
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly db: DbService) {}
+  private readonly logger = Logger(TicketsService.name);
+
+  constructor(
+    private readonly db: DbService,
+    private readonly events: EventEmitter2,
+  ) {}
 
   /** Inside the transaction that confirms reservations: one ticket per seat. */
   async issue(
@@ -152,6 +161,22 @@ export class TicketsService {
       if (other) {
         return { result: 'wrong_mode' };
       }
+    }
+
+    if (outcome.result === 'valid') {
+      // After commit. A delivery failure never fails a scan; the delivery job retries.
+      const event: TicketCheckedInEvent = {
+        ...ctx,
+        ticketId: outcome.ticket!.id,
+        checkedInByUserId: userId,
+      };
+      await this.events
+        .emitAsync(TICKET_CHECKED_IN, event)
+        .catch((error: unknown) =>
+          this.logger.error(
+            `Failed to dispatch ticket.checked_in for ${outcome.ticket!.id}: ${String(error)}`,
+          ),
+        );
     }
 
     return outcome;

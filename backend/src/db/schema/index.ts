@@ -13,4 +13,5 @@ export * from './payments';
 export * from './idempotency-keys';
 export * from './refunds';
 export * from './webhook-endpoints';
+export * from './webhook-deliveries';
 export * from './types';

@@ -20,6 +20,8 @@ import type {
   Session,
   Showtime,
   Ticket,
+  WebhookDelivery,
+  WebhookEndpoint,
 } from '@src/db/schema/types';
 import type {
   BASIC_ENTITLEMENTS,
@@ -138,6 +140,29 @@ export interface MemberScope {
 }
 
 export type ApiKeyView = Omit<ApiKey, 'keyHash' | 'organizationId'>;
+
+export type WebhookEndpointView = Omit<
+  WebhookEndpoint,
+  'secret' | 'organizationId'
+>;
+/** Returned once on create/rotate; the secret is stored encrypted and never sent again. */
+export type WebhookEndpointWithSecret = WebhookEndpointView & {
+  secret: string;
+};
+
+export type WebhookDeliveryView = Pick<
+  WebhookDelivery,
+  | 'id'
+  | 'endpointId'
+  | 'event'
+  | 'status'
+  | 'attempts'
+  | 'responseCode'
+  | 'lastError'
+  | 'payload'
+  | 'deliveredAt'
+  | 'createdAt'
+>;
 
 export type PaymentConfigView = Omit<
   PaymentConfig,

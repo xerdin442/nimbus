@@ -23,6 +23,7 @@ import { MoviesModule } from './movies/movies.module';
 import { ShowtimesModule } from './showtimes/showtimes.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { ReservationsModule } from './reservations/reservations.module';
     ShowtimesModule,
     TicketsModule,
     ReservationsModule,
+    WebhooksModule,
   ],
 
   providers: [

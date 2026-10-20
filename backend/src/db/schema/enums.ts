@@ -60,6 +60,13 @@ export const paymentStatusEnum = pgEnum('payment_status', [
   'failed',
 ]);
 
+/** One outgoing webhook delivery attempt log: `pending` until an attempt succeeds or is exhausted. */
+export const webhookDeliveryStatusEnum = pgEnum('webhook_delivery_status', [
+  'pending',
+  'success',
+  'failed',
+]);
+
 export const refundStatusEnum = pgEnum('refund_status', [
   'pending',
   'processing',

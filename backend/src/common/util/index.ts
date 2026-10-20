@@ -3,6 +3,8 @@ import { ThrottlerModuleOptions, ThrottlerOptions } from '@nestjs/throttler';
 import { Secrets } from '@src/common/secrets';
 import type { Currency } from '@src/common/types';
 
+export const REQUEST_TIMEOUT_MS = 10_000;
+
 export const randomAlphanumeric = (length: number): string => {
   const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
   const bytes = randomBytes(length);

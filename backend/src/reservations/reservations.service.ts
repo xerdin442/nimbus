@@ -48,7 +48,9 @@ import {
   EXPIRE_JOB,
   REFUND_JOB,
   RESERVATIONS_QUEUE,
+  RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
+  RESERVATION_EXPIRED,
   RESERVATION_PAYMENT_CONFLICT,
   RESERVATION_REFUNDED,
 } from '@src/common/types/constants';
@@ -276,6 +278,7 @@ export class ReservationsService {
         .where(eq(reservations.id, id));
     });
 
+    await this.emit(RESERVATION_CANCELLED, ctx, id);
     return this.get(ctx, id);
   }
 
@@ -284,8 +287,8 @@ export class ReservationsService {
    * reservation was paid or cancelled first, or (defensively) if it isn't due yet.
    */
   async expire(ctx: TenantContext, id: string): Promise<boolean> {
-    return this.db.withTenant(ctx, async (tx) => {
-      const [expired] = await tx
+    const expired = await this.db.withTenant(ctx, async (tx) => {
+      const [lapsed] = await tx
         .update(reservations)
         .set({ status: 'expired', expiredAt: new Date() })
         .where(
@@ -297,11 +300,16 @@ export class ReservationsService {
         )
         .returning({ id: reservations.id });
 
-      if (expired) {
+      if (lapsed) {
         await this.inventory.release(tx, id);
       }
-      return Boolean(expired);
+      return Boolean(lapsed);
     });
+
+    if (expired) {
+      await this.emit(RESERVATION_EXPIRED, ctx, id);
+    }
+    return expired;
   }
 
   /**
@@ -570,7 +578,7 @@ export class ReservationsService {
     ctx: TenantContext,
     showtimeId: string,
   ): Promise<void> {
-    const paid = await this.db.withTenant(ctx, async (tx) => {
+    const { cancelled, paid } = await this.db.withTenant(ctx, async (tx) => {
       const cancelled = await tx
         .update(reservations)
         .set({ status: 'cancelled', cancelledAt: new Date() })
@@ -586,7 +594,7 @@ export class ReservationsService {
         await this.inventory.release(tx, id);
       }
 
-      return tx
+      const paid = await tx
         .select({ id: reservations.id })
         .from(reservations)
         .where(
@@ -596,7 +604,12 @@ export class ReservationsService {
             eq(reservations.channel, 'api'),
           ),
         );
+      return { cancelled, paid };
     });
+
+    for (const { id } of cancelled) {
+      await this.emit(RESERVATION_CANCELLED, ctx, id);
+    }
 
     for (const { id } of paid) {
       const job: RefundReservationJob = {

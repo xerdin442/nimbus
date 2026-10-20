@@ -1,3 +1,4 @@
+import { REQUEST_TIMEOUT_MS } from '@src/common/util';
 import {
   MailMessage,
   MailProvider,
@@ -5,7 +6,6 @@ import {
 } from './mail-provider.interface';
 
 const BREVO_SEND_URL = 'https://api.brevo.com/v3/smtp/email';
-const TIMEOUT_MS = 10_000;
 
 export const parseAddress = (
   value: string,
@@ -38,7 +38,7 @@ export class BrevoProvider implements MailProvider {
           textContent: message.text,
           ...(message.replyTo && { replyTo: { email: message.replyTo } }),
         }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
       throw new MailProviderError(

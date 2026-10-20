@@ -16,6 +16,10 @@ export const PROCESS_EVENT_JOB = 'process-event';
 /** After a broken key is reconnected: verifies pending payments with the provider. */
 export const RECONCILE_JOB = 'reconcile';
 
+export const WEBHOOKS_QUEUE = 'webhooks';
+/** Points one stored delivery at its endpoint URL (jobId `deliver-<deliveryId>`). */
+export const DELIVER_JOB = 'deliver';
+
 // ── In-process domain events (EventEmitter2) ────────────────────────────────────────────────────
 
 export const SHOWTIME_CANCELLED = 'showtime.cancelled';
@@ -25,6 +29,9 @@ export const REFUND_FAILED = 'refund.failed';
 
 /** Outgoing webhooks and customer emails listen to these. */
 export const RESERVATION_CONFIRMED = 'reservation.confirmed';
+export const RESERVATION_CANCELLED = 'reservation.cancelled';
+export const RESERVATION_EXPIRED = 'reservation.expired';
 export const RESERVATION_REFUNDED = 'reservation.refunded';
+export const TICKET_CHECKED_IN = 'ticket.checked_in';
 /** Paid after its seats were gone (or the showtime closed): the payment is refunded. */
 export const RESERVATION_PAYMENT_CONFLICT = 'reservation.payment_conflict';

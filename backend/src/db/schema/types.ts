@@ -13,6 +13,7 @@ import {
   seatTypeEnum,
   showtimeSeatStatusEnum,
   showtimeStatusEnum,
+  webhookDeliveryStatusEnum,
 } from './enums';
 import { organizations } from './organizations';
 import {
@@ -28,6 +29,7 @@ import { locations } from './locations';
 import { screens, seatLayouts, seats } from './screens';
 import { movies } from './movies';
 import { webhookEndpoints } from './webhook-endpoints';
+import { webhookDeliveries } from './webhook-deliveries';
 import { orgSettings } from './org-settings';
 import { showtimes, showtimeSeats } from './showtimes';
 import { reservations, tickets } from './reservations';
@@ -73,6 +75,9 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 export const PAYMENT_STATUSES = paymentStatusEnum.enumValues;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
+export const WEBHOOK_DELIVERY_STATUSES = webhookDeliveryStatusEnum.enumValues;
+export type DeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
+
 export const REFUND_STATUSES = refundStatusEnum.enumValues;
 export type RefundStatus = (typeof REFUND_STATUSES)[number];
 
@@ -113,6 +118,8 @@ export type Seat = typeof seats.$inferSelect;
 export type Movie = typeof movies.$inferSelect;
 
 export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
+
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 
 export type OrgSettings = typeof orgSettings.$inferSelect;
 

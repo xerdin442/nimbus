@@ -9,9 +9,9 @@ import {
   ProviderRefund,
   ProviderTransaction,
 } from './payment-provider.interface';
+import { REQUEST_TIMEOUT_MS } from '@src/common/util';
 
 export const PAYSTACK_API_URL = 'https://api.paystack.co';
-const TIMEOUT_MS = 10_000;
 
 interface PaystackEnvelope<T> {
   status?: boolean;
@@ -124,7 +124,7 @@ export class PaystackProvider implements PaymentProvider {
           ...(body && { 'content-type': 'application/json' }),
         },
         body: body && JSON.stringify(body),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
     } catch (error) {
       throw new PaymentProviderError(
