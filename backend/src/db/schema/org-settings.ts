@@ -1,4 +1,4 @@
-import { integer, pgTable } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable } from 'drizzle-orm/pg-core';
 import { id, timestamps } from './columns';
 import { organizationId } from './organizations';
 
@@ -6,6 +6,7 @@ export const DEFAULT_ORG_SETTINGS = {
   adsMinutes: 15,
   cleanupMinutes: 15,
   holdMinutes: 10,
+  sendTestEmailsToMe: false,
 } as const;
 
 /** Scheduling and booking settings, one row per org, created on first update. */
@@ -24,5 +25,12 @@ export const orgSettings = pgTable('org_settings', {
   holdMinutes: integer('hold_minutes')
     .notNull()
     .default(DEFAULT_ORG_SETTINGS.holdMinutes),
+  /**
+   * Send test-mode booking emails to the notification email instead of skipping them. Test-mode
+   * emails are otherwise rendered, logged as `skipped` and previewable from the dashboard.
+   */
+  sendTestEmailsToMe: boolean('send_test_emails_to_me')
+    .notNull()
+    .default(false),
   ...timestamps,
 });

@@ -178,6 +178,7 @@ describe('Booking (e2e)', () => {
         adsMinutes: 15,
         cleanupMinutes: 15,
         holdMinutes: 10,
+        sendTestEmailsToMe: false,
       });
 
       const saved = await dash('get', '/organization/settings', cinema.owner);
@@ -185,6 +186,7 @@ describe('Booking (e2e)', () => {
         adsMinutes: 10,
         cleanupMinutes: 10,
         holdMinutes: 10,
+        sendTestEmailsToMe: false,
       });
 
       await dash('patch', '/organization/settings', cinema.owner)

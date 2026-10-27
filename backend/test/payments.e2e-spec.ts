@@ -532,7 +532,12 @@ describe('Payments (e2e)', () => {
         .expect(503);
       expect(res.body.error.code).toBe('payment_provider_unavailable');
 
-      const config = await dash('get', '/payment-config', cinema.owner, 'test');
+      const config = await dash(
+        'get',
+        '/payments/config',
+        cinema.owner,
+        'test',
+      );
       expect(config.body.data.status).toBe('broken');
 
       // No new holds without a way to pay.
@@ -552,7 +557,7 @@ describe('Payments (e2e)', () => {
 
       await eventuallyStatus(cinema, id, 'confirmed');
       expect(
-        (await dash('get', '/payment-config', cinema.owner, 'test')).body.data,
+        (await dash('get', '/payments/config', cinema.owner, 'test')).body.data,
       ).toMatchObject({ status: 'verified', isWebhookVerified: false });
     });
   });

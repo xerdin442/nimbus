@@ -85,3 +85,29 @@ export const refundReasonEnum = pgEnum('refund_reason', [
   'payment_conflict',
   'duplicate_payment',
 ]);
+
+export const emailTypeEnum = pgEnum('email_type', [
+  'confirmation',
+  'cancellation',
+  'refund',
+]);
+
+export const emailDeliveryStatusEnum = pgEnum('email_delivery_status', [
+  'queued',
+  'sent',
+  'failed',
+  'skipped',
+]);
+
+/**
+ * Why an email failed or was skipped. `test_mode` and `no_longer_relevant` are skips;
+ * the provider values decide whether the dashboard retry button is shown.
+ */
+export const emailFailureReasonEnum = pgEnum('email_failure_reason', [
+  'provider_auth',
+  'provider_broken',
+  'provider_unavailable',
+  'invalid_recipient',
+  'test_mode',
+  'no_longer_relevant',
+]);

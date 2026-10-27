@@ -892,12 +892,12 @@ describe('Org setup (e2e)', () => {
     it('rejects a key for the wrong mode and a key Paystack refuses', async () => {
       const session = await signup();
 
-      const mismatch = await dash('put', '/payment-config', session, 'test')
+      const mismatch = await dash('put', '/payments/config', session, 'test')
         .send({ secretKey: 'sk_live_good' })
         .expect(422);
       expect(mismatch.body.error.code).toBe('key_mode_mismatch');
 
-      const refused = await dash('put', '/payment-config', session, 'test')
+      const refused = await dash('put', '/payments/config', session, 'test')
         .send({ secretKey: 'sk_test_bad' })
         .expect(422);
       expect(refused.body.error.code).toBe('payment_connection_failed');
@@ -906,7 +906,7 @@ describe('Org setup (e2e)', () => {
     it('keeps test and live payment configs apart, and never returns the secret', async () => {
       const session = await signup();
 
-      const saved = await dash('put', '/payment-config', session, 'test')
+      const saved = await dash('put', '/payments/config', session, 'test')
         .send({ secretKey: 'sk_test_good' })
         .expect(200);
       expect(saved.body.data.config).toMatchObject({
@@ -915,9 +915,12 @@ describe('Org setup (e2e)', () => {
       });
       expect(saved.body.data.config.encryptedSecret).toBeUndefined();
 
-      const live = await dash('get', '/payment-config', session, 'live').expect(
-        200,
-      );
+      const live = await dash(
+        'get',
+        '/payments/config',
+        session,
+        'live',
+      ).expect(200);
       expect(live.body.data).toBeNull();
     });
 
@@ -925,11 +928,11 @@ describe('Org setup (e2e)', () => {
       const session = await signup();
 
       // Test mode alone never verifies.
-      await dash('put', '/payment-config', session, 'test')
+      await dash('put', '/payments/config', session, 'test')
         .send({ secretKey: 'sk_test_good' })
         .expect(200);
 
-      const failedMail = await dash('put', '/mail-config', session)
+      const failedMail = await dash('put', '/emails/config', session)
         .send({
           provider: 'brevo',
           apiKey: 'bad',
@@ -939,7 +942,7 @@ describe('Org setup (e2e)', () => {
         .expect(422);
       expect(failedMail.body.error.code).toBe('mail_connection_failed');
 
-      const mail = await dash('put', '/mail-config', session)
+      const mail = await dash('put', '/emails/config', session)
         .send({
           provider: 'brevo',
           apiKey: 'xkeysib-good',
@@ -949,7 +952,7 @@ describe('Org setup (e2e)', () => {
         .expect(200);
       expect(mail.body.data.isVerified).toBe(false);
 
-      const payment = await dash('put', '/payment-config', session, 'live')
+      const payment = await dash('put', '/payments/config', session, 'live')
         .send({ secretKey: 'sk_live_good' })
         .expect(200);
       expect(payment.body.data.isVerified).toBe(true);

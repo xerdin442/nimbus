@@ -1,6 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
-import { and, arrayContains, count, desc, eq, type SQL } from 'drizzle-orm';
+import {
+  and,
+  arrayContains,
+  count,
+  desc,
+  eq,
+  gte,
+  lte,
+  type SQL,
+} from 'drizzle-orm';
 import type { Queue } from 'bullmq';
 import { DbService } from '@src/db/db.service';
 import { webhookDeliveries, webhookEndpoints } from '@src/db/schema';
@@ -168,6 +177,12 @@ export class WebhooksService {
         : undefined,
       query.event ? eq(webhookDeliveries.event, query.event) : undefined,
       query.status ? eq(webhookDeliveries.status, query.status) : undefined,
+      query.startDate
+        ? gte(webhookDeliveries.createdAt, query.startDate)
+        : undefined,
+      query.endDate
+        ? lte(webhookDeliveries.createdAt, query.endDate)
+        : undefined,
     ];
     const where = and(...filters);
 

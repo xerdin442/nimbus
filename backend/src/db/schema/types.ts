@@ -1,6 +1,9 @@
 import {
   apiKeyTypeEnum,
   configStatusEnum,
+  emailDeliveryStatusEnum,
+  emailFailureReasonEnum,
+  emailTypeEnum,
   mailProviderEnum,
   paymentMethodEnum,
   paymentProviderEnum,
@@ -30,6 +33,7 @@ import { screens, seatLayouts, seats } from './screens';
 import { movies } from './movies';
 import { webhookEndpoints } from './webhook-endpoints';
 import { webhookDeliveries } from './webhook-deliveries';
+import { emailDeliveries } from './email-deliveries';
 import { orgSettings } from './org-settings';
 import { showtimes, showtimeSeats } from './showtimes';
 import { reservations, tickets } from './reservations';
@@ -78,6 +82,15 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const WEBHOOK_DELIVERY_STATUSES = webhookDeliveryStatusEnum.enumValues;
 export type DeliveryStatus = (typeof WEBHOOK_DELIVERY_STATUSES)[number];
 
+export const EMAIL_TYPES = emailTypeEnum.enumValues;
+export type EmailType = (typeof EMAIL_TYPES)[number];
+
+export const EMAIL_DELIVERY_STATUSES = emailDeliveryStatusEnum.enumValues;
+export type EmailDeliveryStatus = (typeof EMAIL_DELIVERY_STATUSES)[number];
+
+export const EMAIL_FAILURE_REASONS = emailFailureReasonEnum.enumValues;
+export type EmailFailureReason = (typeof EMAIL_FAILURE_REASONS)[number];
+
 export const REFUND_STATUSES = refundStatusEnum.enumValues;
 export type RefundStatus = (typeof REFUND_STATUSES)[number];
 
@@ -120,6 +133,8 @@ export type Movie = typeof movies.$inferSelect;
 export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
 
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+
+export type EmailDelivery = typeof emailDeliveries.$inferSelect;
 
 export type OrgSettings = typeof orgSettings.$inferSelect;
 

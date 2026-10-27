@@ -218,7 +218,7 @@ describe('Webhooks (e2e)', () => {
     events: string[],
   ) =>
     (
-      await dash('post', '/webhook-endpoints', owner, mode)
+      await dash('post', '/webhooks/endpoints', owner, mode)
         .send({ url, events })
         .expect(201)
     ).body.data as {
@@ -261,7 +261,7 @@ describe('Webhooks (e2e)', () => {
     });
 
     it('shows the secret exactly once, on create', async () => {
-      const res = await dash('post', '/webhook-endpoints', owner, 'test')
+      const res = await dash('post', '/webhooks/endpoints', owner, 'test')
         .send({
           url: 'https://filmhouse.test/hooks/nimbus',
           events: ['reservation.confirmed', 'ticket.checked_in'],
@@ -277,14 +277,14 @@ describe('Webhooks (e2e)', () => {
       });
 
       const endpoints = (
-        await dash('get', '/webhook-endpoints', owner, 'test').expect(200)
+        await dash('get', '/webhooks/endpoints', owner, 'test').expect(200)
       ).body.data as unknown[];
       expect(endpoints).toHaveLength(1);
       expect(endpoints[0]).not.toHaveProperty('secret');
     });
 
     it('enforces the plan limit per mode', async () => {
-      const res = await dash('post', '/webhook-endpoints', owner, 'test')
+      const res = await dash('post', '/webhooks/endpoints', owner, 'test')
         .send({
           url: 'https://filmhouse.test/hooks/two',
           events: ['reservation.refunded'],
@@ -297,7 +297,7 @@ describe('Webhooks (e2e)', () => {
       const { secret } = (
         await dash(
           'post',
-          `/webhook-endpoints/${registered.id}/rotate`,
+          `/webhooks/endpoints/${registered.id}/rotate`,
           owner,
           'test',
         ).expect(200)
@@ -310,7 +310,7 @@ describe('Webhooks (e2e)', () => {
       const updated = (
         await dash(
           'patch',
-          `/webhook-endpoints/${registered.id}`,
+          `/webhooks/endpoints/${registered.id}`,
           owner,
           'test',
         )
@@ -322,24 +322,24 @@ describe('Webhooks (e2e)', () => {
 
       await dash(
         'delete',
-        `/webhook-endpoints/${registered.id}`,
+        `/webhooks/endpoints/${registered.id}`,
         owner,
         'test',
       ).expect(200);
       const endpoints = (
-        await dash('get', '/webhook-endpoints', owner, 'test').expect(200)
+        await dash('get', '/webhooks/endpoints', owner, 'test').expect(200)
       ).body.data as unknown[];
       expect(endpoints).toHaveLength(0);
     });
 
     it('rejects bad URLs and unknown events', async () => {
-      await dash('post', '/webhook-endpoints', owner, 'test')
+      await dash('post', '/webhooks/endpoints', owner, 'test')
         .send({
           url: 'ftp://filmhouse.test/x',
           events: ['reservation.confirmed'],
         })
         .expect(400);
-      await dash('post', '/webhook-endpoints', owner, 'test')
+      await dash('post', '/webhooks/endpoints', owner, 'test')
         .send({
           url: 'https://filmhouse.test/hooks/nimbus',
           events: ['reservation.confirmed', 'movie.released'],
@@ -486,7 +486,7 @@ describe('Webhooks (e2e)', () => {
 
     it("logs every delivery on the org's log", async () => {
       const list = (
-        await dash('get', '/webhook-deliveries', cinema.owner, 'test').expect(
+        await dash('get', '/webhooks/deliveries', cinema.owner, 'test').expect(
           200,
         )
       ).body as {
@@ -522,7 +522,7 @@ describe('Webhooks (e2e)', () => {
       const filtered = (
         await dash(
           'get',
-          '/webhook-deliveries?status=success&event=reservation.confirmed',
+          '/webhooks/deliveries?status=success&event=reservation.confirmed',
           cinema.owner,
           'test',
         ).expect(200)
@@ -582,7 +582,7 @@ describe('Webhooks (e2e)', () => {
           (
             await dash(
               'get',
-              '/webhook-deliveries?event=reservation.confirmed',
+              '/webhooks/deliveries?event=reservation.confirmed',
               cinema.owner,
               'test',
             ).expect(200)

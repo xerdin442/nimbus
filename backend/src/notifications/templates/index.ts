@@ -1,15 +1,9 @@
 import type { RenderedEmail } from '@src/common/types';
+import { escapeHtml, layout } from './shared';
 
-export const escapeHtml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-const layout = (body: string) =>
-  `<!doctype html><html><body style="font-family:system-ui,sans-serif;line-height:1.5;color:#111">${body}</body></html>`;
+export * from './shared';
+export * from './reservation';
+export * from './alerts';
 
 export const invitationEmail = (input: {
   orgName: string;

@@ -5,6 +5,7 @@ import type {
   ApiKey,
   ApiKeyType,
   ConfigStatus,
+  EmailDelivery,
   Invitation,
   MailConfig,
   Movie,
@@ -164,6 +165,8 @@ export type WebhookDeliveryView = Pick<
   | 'createdAt'
 >;
 
+export type EmailDeliveryView = Omit<EmailDelivery, 'organizationId'>;
+
 export type PaymentConfigView = Omit<
   PaymentConfig,
   'encryptedSecret' | 'organizationId'
@@ -215,7 +218,7 @@ export type TestModeLimitKey = keyof typeof TEST_MODE_LIMITS;
 
 export type OrgSettingsView = Pick<
   OrgSettings,
-  'adsMinutes' | 'cleanupMinutes' | 'holdMinutes'
+  'adsMinutes' | 'cleanupMinutes' | 'holdMinutes' | 'sendTestEmailsToMe'
 >;
 
 export interface SeatCounts {
@@ -368,3 +371,5 @@ export interface PaystackEvent {
     paid_at?: string | null;
   };
 }
+
+export type OrgAlertKind = 'email-delivery-failure' | 'refund-failure';

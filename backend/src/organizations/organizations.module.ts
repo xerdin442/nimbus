@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '@src/notifications/notifications.module';
-import { OrganizationsController } from './organizations.controller';
+import { OrganizationsController } from './controllers/organizations.controller';
 import { OrganizationsService } from './organizations.service';
-import { MembersController } from './members.controller';
+import { MembersController } from './controllers/members.controller';
 import { MembersService } from './members.service';
 import { OrgSettingsService } from './org-settings.service';
 

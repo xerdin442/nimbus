@@ -2,7 +2,17 @@ import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Queue } from 'bullmq';
-import { and, count, desc, eq, inArray, lte, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lte,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
 import { movies, organizations, reservations, showtimes } from '@src/db/schema';
 import type {
@@ -521,6 +531,10 @@ export class ReservationsService {
       membership.locationIds.length
         ? inArray(showtimes.locationId, membership.locationIds)
         : undefined,
+      query.startDate
+        ? gte(reservations.createdAt, query.startDate)
+        : undefined,
+      query.endDate ? lte(reservations.createdAt, query.endDate) : undefined,
     ];
     const where = and(...filters);
 

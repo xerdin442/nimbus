@@ -142,6 +142,9 @@ export class EndpointsService {
   }
 
   private toView(row: WebhookEndpoint): WebhookEndpointView {
-    return { ...row };
+    const view: Partial<WebhookEndpoint> = { ...row };
+    delete view.secret;
+    delete view.organizationId;
+    return view as WebhookEndpointView;
   }
 }

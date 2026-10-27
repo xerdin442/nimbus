@@ -12,6 +12,7 @@ interface SecretsConfig {
   REDIS_URL: string;
   RATE_LIMITING_PER_SECOND: number;
   RATE_LIMITING_PER_MINUTE: number;
+  EMAIL_ALERT_DELAY_MS: number;
   DASHBOARD_URL: string;
   JWT_SECRET: string;
   ENCRYPTION_KEY: string;
@@ -28,6 +29,7 @@ export const Secrets: SecretsConfig = {
   REDIS_URL: getString('REDIS_URL'),
   RATE_LIMITING_PER_SECOND: getNumber('RATE_LIMITING_PER_SECOND'),
   RATE_LIMITING_PER_MINUTE: getNumber('RATE_LIMITING_PER_MINUTE'),
+  EMAIL_ALERT_DELAY_MS: getNumber('EMAIL_ALERT_DELAY_MS'),
   DASHBOARD_URL: getString('DASHBOARD_URL'),
   JWT_SECRET: getString('JWT_SECRET'),
   ENCRYPTION_KEY: getString('ENCRYPTION_KEY'),

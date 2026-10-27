@@ -16,8 +16,8 @@ import {
   CurrentUser,
 } from '@src/common/decorators/request.decorators';
 import type { MembershipContext } from '@src/common/types';
-import { MembersService } from './members.service';
-import { InviteMemberDto, UpdateMemberDto } from './dto/member.dto';
+import { MembersService } from '../members.service';
+import { InviteMemberDto, UpdateMemberDto } from '../dto/member.dto';
 
 @Dashboard('owner', 'manager')
 @Controller('dashboard/members')

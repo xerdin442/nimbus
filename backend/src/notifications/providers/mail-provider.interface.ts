@@ -1,3 +1,8 @@
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 export interface MailMessage {
   from: string;
   to: string;
@@ -5,6 +10,7 @@ export interface MailMessage {
   html: string;
   text: string;
   replyTo?: string;
+  attachments?: MailAttachment[];
 }
 
 export interface MailProvider {

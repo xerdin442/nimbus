@@ -57,7 +57,7 @@ describe('Webhook verification (e2e)', () => {
     });
 
   const config = (owner: Session, mode: 'test' | 'live' = 'test') =>
-    dash('get', '/payment-config', owner, mode).expect(200);
+    dash('get', '/payments/config', owner, mode).expect(200);
 
   /** POST the verify endpoint (200); returns its data. */
   const requestVerify = async (
@@ -65,9 +65,12 @@ describe('Webhook verification (e2e)', () => {
     mode: 'test' | 'live' = 'test',
   ) =>
     (
-      await dash('post', '/payment-config/webhooks/verify', owner, mode).expect(
-        200,
-      )
+      await dash(
+        'post',
+        '/payments/config/webhooks/verify',
+        owner,
+        mode,
+      ).expect(200)
     ).body.data as {
       status: 'started' | 'already_verified';
       reference: string | null;
@@ -228,7 +231,7 @@ describe('Webhook verification (e2e)', () => {
       const owner = await signup();
       const res = await dash(
         'post',
-        '/payment-config/webhooks/verify',
+        '/payments/config/webhooks/verify',
         owner,
       ).expect(409);
       expect(res.body.error.code).toBe('payment_config_not_verified');

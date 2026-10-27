@@ -12,6 +12,7 @@ const settingsColumns = {
   adsMinutes: orgSettings.adsMinutes,
   cleanupMinutes: orgSettings.cleanupMinutes,
   holdMinutes: orgSettings.holdMinutes,
+  sendTestEmailsToMe: orgSettings.sendTestEmailsToMe,
 };
 
 @Injectable()

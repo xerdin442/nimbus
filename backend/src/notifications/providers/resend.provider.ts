@@ -35,6 +35,10 @@ export class ResendProvider implements MailProvider {
       html: message.html,
       text: message.text,
       replyTo: message.replyTo,
+      attachments: message.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content.toString('base64'),
+      })),
     });
 
     if (error) {

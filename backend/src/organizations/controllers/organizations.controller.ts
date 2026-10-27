@@ -5,12 +5,12 @@ import {
   CurrentTenant,
 } from '@src/common/decorators/request.decorators';
 import type { MembershipContext, TenantContext } from '@src/common/types';
-import { OrganizationsService } from './organizations.service';
-import { OrgSettingsService } from './org-settings.service';
+import { OrganizationsService } from '../organizations.service';
+import { OrgSettingsService } from '../org-settings.service';
 import {
   UpdateOrganizationDto,
   UpdateOrgSettingsDto,
-} from './dto/organization.dto';
+} from '../dto/organization.dto';
 
 @Controller('dashboard/organization')
 export class OrganizationsController {

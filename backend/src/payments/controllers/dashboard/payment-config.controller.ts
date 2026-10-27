@@ -14,7 +14,7 @@ import { PaymentConfigService } from '../../payment-config.service';
 import { ConnectPaymentConfigDto } from '../../dto/payment-config.dto';
 
 @Dashboard('owner')
-@Controller('dashboard/payment-config')
+@Controller('dashboard/payments/config')
 export class DashboardPaymentConfigController {
   constructor(private readonly paymentConfig: PaymentConfigService) {}
 

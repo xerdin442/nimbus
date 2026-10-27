@@ -1,4 +1,5 @@
 import type { RefundReason } from '@src/db/schema/types';
+import { OrgAlertKind } from '.';
 
 /** BullMQ job data. Each carries the org and mode, so the job runs inside withTenant. */
 
@@ -27,4 +28,20 @@ export interface RefundReservationJob extends BaseJob {
 
 export interface DeliverWebhookJob extends BaseJob {
   deliveryId: string;
+}
+
+export interface SendEmailJob extends BaseJob {
+  deliveryId: string;
+}
+
+export interface SendAlertJob {
+  key: string;
+  kind: OrgAlertKind;
+  to: string;
+  orgName: string;
+  reservationCode?: string;
+  currency?: string;
+  amount?: number;
+  failureReason?: string;
+  since?: Date;
 }

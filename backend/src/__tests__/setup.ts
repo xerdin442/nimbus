@@ -11,6 +11,7 @@ jest.mock('@src/common/secrets', () => ({
     REDIS_URL: 'redis://:test-redis-password@localhost:6380',
     RATE_LIMITING_PER_SECOND: 100,
     RATE_LIMITING_PER_MINUTE: 1000,
+    EMAIL_ALERT_DELAY_MS: 3000,
     DASHBOARD_URL: 'http://localhost:5173',
     JWT_SECRET: 'test-jwt-secret',
     ENCRYPTION_KEY:

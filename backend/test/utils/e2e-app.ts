@@ -124,7 +124,11 @@ const paystackResponse = (
 
 /** Fake outbound HTTP: Paystack (see FakePaystack) and Brevo, which accepts any key but "bad". */
 const fakeFetch =
-  (realFetch: typeof fetch, paystack: FakePaystack) =>
+  (
+    realFetch: typeof fetch,
+    paystack: FakePaystack,
+    brevoSends: { apiKey: string; body: Record<string, unknown> }[],
+  ) =>
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     const headers = new Headers(init?.headers);
@@ -141,6 +145,18 @@ const fakeFetch =
       );
     }
     if (url.startsWith('https://api.brevo.com/')) {
+      const apiKey = headers.get('api-key') ?? '';
+      const body = init?.body
+        ? (JSON.parse(init.body as string) as Record<string, unknown>)
+        : {};
+      // Recipients containing "invalid" are refused, to exercise send failures.
+      const to = (body.to as { email: string }[] | undefined)?.[0]?.email;
+      if (apiKey !== 'bad' && to?.includes('invalid')) {
+        return json(400, { message: 'Invalid recipient' });
+      }
+      if (apiKey !== 'bad') {
+        brevoSends.push({ apiKey, body });
+      }
       return headers.get('api-key') === 'bad'
         ? json(401, { message: 'Key not found' })
         : json(201, { messageId: '<msg@brevo>' });
@@ -180,7 +196,9 @@ export function useE2eApp() {
     refunds: [],
     revokedKeys: new Set(),
   };
-  const fake = fakeFetch(realFetch, paystack);
+  /** Every successful Brevo send (connection tests and org emails), in request order. */
+  const brevoSends: { apiKey: string; body: Record<string, unknown> }[] = [];
+  const fake = fakeFetch(realFetch, paystack, brevoSends);
 
   /** Set in `beforeAll`; read them inside tests and hooks only. */
   const ctx = {} as {
@@ -204,7 +222,10 @@ export function useE2eApp() {
       // As in main.ts: webhook signatures are checked against the raw body.
       moduleRef.createNestApplication<INestApplication<App>>({ rawBody: true }),
     );
-    await ctx.app.init();
+    // Bind the server here: a listening server lets supertest skip its own
+    // start/close bookkeeping, which closes the server between requests and
+    // races the next one into `TypeError: null (reading 'address')`.
+    await ctx.app.listen(0, '127.0.0.1');
 
     ctx.platformMail = jest.spyOn(ctx.app.get(PlatformMailService), 'send');
   });
@@ -305,7 +326,7 @@ export function useE2eApp() {
 
   /** Connects the live Paystack key and an email provider: the org becomes verified. */
   const verify = async (session: Session) => {
-    await dash('put', '/mail-config', session)
+    await dash('put', '/emails/config', session)
       .send({
         provider: 'brevo',
         apiKey: 'xkeysib-good',
@@ -313,14 +334,14 @@ export function useE2eApp() {
         fromName: 'Filmhouse',
       })
       .expect(200);
-    await dash('put', '/payment-config', session, 'live')
+    await dash('put', '/payments/config', session, 'live')
       .send({ secretKey: 'sk_live_good' })
       .expect(200);
   };
 
   /** Connects a Paystack key for `mode` (keys ending in "good" pass the connection test). */
   const connectPaystack = (session: Session, mode: Mode, secretKey: string) =>
-    dash('put', '/payment-config', session, mode)
+    dash('put', '/payments/config', session, mode)
       .send({ secretKey })
       .expect(200);
 
@@ -337,7 +358,7 @@ export function useE2eApp() {
     const { data } = (
       await dash(
         'post',
-        '/payment-config/webhooks/verify',
+        '/payments/config/webhooks/verify',
         session,
         mode,
       ).expect(200)
@@ -359,9 +380,12 @@ export function useE2eApp() {
     }).expect(200);
 
     await eventually(async () => {
-      const config = await dash('get', '/payment-config', session, mode).expect(
-        200,
-      );
+      const config = await dash(
+        'get',
+        '/payments/config',
+        session,
+        mode,
+      ).expect(200);
       expect(config.body.data.isWebhookVerified).toBe(true);
     });
   };
@@ -404,6 +428,7 @@ export function useE2eApp() {
   return {
     ctx,
     paystack,
+    brevoSends,
     http,
     seq,
     dash,

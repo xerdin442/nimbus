@@ -1,5 +1,6 @@
 import { type Currency, SUPPORTED_CURRENCIES } from '@src/common/types';
 import {
+  IsBoolean,
   IsEmail,
   IsIn,
   IsInt,
@@ -55,4 +56,8 @@ export class UpdateOrgSettingsDto {
   @Min(5)
   @Max(30)
   holdMinutes?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  sendTestEmailsToMe?: boolean;
 }

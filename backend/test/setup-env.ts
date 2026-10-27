@@ -9,6 +9,7 @@ config({ quiet: true });
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 process.env.PLATFORM_MAIL_DRIVER = 'log';
+process.env.EMAIL_ALERT_DELAY_MS = '3000';
 
 const defaults: Record<string, string> = {
   PORT: '3000',

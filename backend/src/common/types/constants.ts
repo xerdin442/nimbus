@@ -20,6 +20,12 @@ export const WEBHOOKS_QUEUE = 'webhooks';
 /** Points one stored delivery at its endpoint URL (jobId `deliver-<deliveryId>`). */
 export const DELIVER_JOB = 'deliver';
 
+export const EMAILS_QUEUE = 'emails';
+/** One attempt at sending a stored email (jobId `email-<deliveryId>-<timestamp>`). */
+export const SEND_EMAIL_JOB = 'send-email';
+/** One attempt at sending a platform alert email. */
+export const SEND_ALERT_JOB = 'send-alert';
+
 // ── In-process domain events (EventEmitter2) ────────────────────────────────────────────────────
 
 export const SHOWTIME_CANCELLED = 'showtime.cancelled';

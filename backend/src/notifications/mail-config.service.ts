@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
 import { mailConfigs, organizations, users } from '@src/db/schema';
 import type { MailConfig } from '@src/db/schema/types';
@@ -86,6 +86,22 @@ export class MailConfigService {
 
       return { config: this.toView(config), isVerified };
     });
+  }
+
+  /**
+   * The provider rejected the API key (401/403 on a send): the config is broken
+   * and customer emails go into a retryable backlog until it is reconnected.
+   */
+  async markBroken(orgId: string, message: string): Promise<void> {
+    await this.db.client
+      .update(mailConfigs)
+      .set({ status: 'broken', lastError: message })
+      .where(
+        and(
+          eq(mailConfigs.organizationId, orgId),
+          eq(mailConfigs.status, 'verified'),
+        ),
+      );
   }
 
   private toView(config: MailConfig): MailConfigView {

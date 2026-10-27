@@ -5,11 +5,11 @@ import {
   CurrentUser,
 } from '@src/common/decorators/request.decorators';
 import type { MembershipContext } from '@src/common/types';
-import { MailConfigService } from './mail-config.service';
-import { ConnectMailConfigDto } from './dto/mail-config.dto';
+import { MailConfigService } from '../mail-config.service';
+import { ConnectMailConfigDto } from '../dto/mail-config.dto';
 
 @Dashboard('owner')
-@Controller('dashboard/mail-config')
+@Controller('dashboard/emails/config')
 export class MailConfigController {
   constructor(private readonly mailConfig: MailConfigService) {}
 

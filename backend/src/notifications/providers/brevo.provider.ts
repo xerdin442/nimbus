@@ -37,6 +37,12 @@ export class BrevoProvider implements MailProvider {
           htmlContent: message.html,
           textContent: message.text,
           ...(message.replyTo && { replyTo: { email: message.replyTo } }),
+          ...(message.attachments && {
+            attachment: message.attachments.map((attachment) => ({
+              name: attachment.filename,
+              content: attachment.content.toString('base64'),
+            })),
+          }),
         }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
