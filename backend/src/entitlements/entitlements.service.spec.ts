@@ -1,4 +1,7 @@
 import { CodedException } from '@src/common/errors';
+import type { DbService } from '@src/db/db.service';
+import type { RedisClientType } from 'redis';
+import { BASIC_ENTITLEMENTS } from './entitlements.constants';
 import { EntitlementsService } from './entitlements.service';
 import type { Transaction } from '@src/common/types';
 
@@ -14,19 +17,31 @@ const fakeTx = () => {
   return { tx: chain as unknown as Transaction, forUpdate };
 };
 
+const redisWithBasic = () =>
+  ({
+    get: jest.fn().mockResolvedValue(JSON.stringify(BASIC_ENTITLEMENTS)),
+    set: jest.fn(),
+    del: jest.fn(),
+  }) as unknown as RedisClientType;
+
 describe('EntitlementsService', () => {
-  const service = new EntitlementsService();
+  const service = () =>
+    new EntitlementsService({} as DbService, redisWithBasic());
 
   it('returns Basic defaults while there is no billing', async () => {
-    await expect(service.get('org', 'locations.max')).resolves.toBe(3);
-    await expect(service.get('org', 'reports.export')).resolves.toBe(false);
+    const entitlements = service();
+
+    await expect(entitlements.get('org', 'locations.max')).resolves.toBe(3);
+    await expect(entitlements.get('org', 'reports.export')).resolves.toBe(
+      false,
+    );
   });
 
   it('locks the org row before counting', async () => {
     const { tx, forUpdate } = fakeTx();
     const count = jest.fn().mockResolvedValue(0);
 
-    await service.assertWithinLimit(tx, 'org', 'locations.max', count);
+    await service().assertWithinLimit(tx, 'org', 'locations.max', count);
 
     expect(forUpdate).toHaveBeenCalledWith('update');
     expect(forUpdate.mock.invocationCallOrder[0]).toBeLessThan(
@@ -38,14 +53,14 @@ describe('EntitlementsService', () => {
     const { tx } = fakeTx();
 
     await expect(
-      service.assertWithinLimit(tx, 'org', 'locations.max', async () => 2),
+      service().assertWithinLimit(tx, 'org', 'locations.max', async () => 2),
     ).resolves.toBeUndefined();
   });
 
   it('throws plan_limit_reached with details at the limit', async () => {
     const { tx } = fakeTx();
 
-    const error = await service
+    const error = await service()
       .assertWithinLimit(tx, 'org', 'locations.max', async () => 3)
       .catch((e: unknown) => e);
 
@@ -61,7 +76,12 @@ describe('EntitlementsService', () => {
     const { tx } = fakeTx();
 
     await expect(
-      service.assertWithinLimit(tx, 'org', 'api_keys.test.max', async () => 2),
+      service().assertWithinLimit(
+        tx,
+        'org',
+        'api_keys.test.max',
+        async () => 2,
+      ),
     ).rejects.toBeInstanceOf(CodedException);
   });
 });

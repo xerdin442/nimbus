@@ -11,6 +11,7 @@ import type {
   Movie,
   OrgSettings,
   PaymentConfig,
+  Plan,
   Refund,
   RefundReason,
   Reservation,
@@ -20,6 +21,7 @@ import type {
   SeatType,
   Session,
   Showtime,
+  Subscription,
   Ticket,
   WebhookDelivery,
   WebhookEndpoint,
@@ -327,6 +329,14 @@ export interface OfflinePayment {
   currency: string;
 }
 
+export const PAYSTACK_API_URL = 'https://api.paystack.co';
+
+export interface PaystackEnvelope<T> {
+  status?: boolean;
+  message?: string;
+  data?: T;
+}
+
 export interface CheckoutView {
   authorizationUrl: string;
   reference: string;
@@ -373,3 +383,62 @@ export interface PaystackEvent {
 }
 
 export type OrgAlertKind = 'email-delivery-failure' | 'refund-failure';
+
+export type CurrentSubscription = Subscription & { plan: Plan };
+
+export type PlanView = Pick<
+  Plan,
+  'id' | 'amount' | 'currency' | 'name' | 'key' | 'interval' | 'tier'
+>;
+
+export type SubscriptionView = Pick<
+  Subscription,
+  | 'id'
+  | 'status'
+  | 'currentPeriodEnd'
+  | 'currentPeriodStart'
+  | 'nextPaymentDate'
+  | 'startedAt'
+  | 'cancelAtPeriodEnd'
+> & {
+  plan: PlanView;
+};
+
+export const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'past_due'] as const;
+export type ActiveSubscriptionStatus =
+  (typeof ACTIVE_SUBSCRIPTION_STATUSES)[number];
+
+export type PlanUsage = {
+  locations: number;
+  screens: number;
+  staff: {
+    members: number;
+    pendingInvites: number;
+  };
+  liveApiKeys: number;
+  liveWebhookEndpoints: number;
+};
+
+export type BillingOverview = {
+  plans: PlanView[];
+  subscription: SubscriptionView | null;
+  entitlements: Entitlements;
+  usage: PlanUsage;
+  billingEmail: string | null;
+};
+
+export interface PaystackPlan {
+  name: string;
+  plan_code: string;
+  amount: number;
+  interval: string;
+  currency: string;
+}
+
+export interface SyncedPlan {
+  name: string;
+  planCode: string;
+  amount: number;
+  interval: string;
+  currency: string;
+}

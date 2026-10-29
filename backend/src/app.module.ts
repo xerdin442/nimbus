@@ -12,6 +12,7 @@ import { REDIS_CLIENT, RedisModule } from './common/cache';
 import { HelpersModule } from './common/helpers';
 import { DbModule } from './db/db.module';
 import { EntitlementsModule } from './entitlements/entitlements.module';
+import { BillingModule } from './billing/billing.module';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -39,6 +40,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     RedisModule,
     HelpersModule,
     EntitlementsModule,
+    BillingModule,
     AuthModule,
     OrganizationsModule,
     NotificationsModule,

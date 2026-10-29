@@ -10,14 +10,7 @@ import {
   ProviderTransaction,
 } from './payment-provider.interface';
 import { REQUEST_TIMEOUT_MS } from '@src/common/util';
-
-export const PAYSTACK_API_URL = 'https://api.paystack.co';
-
-interface PaystackEnvelope<T> {
-  status?: boolean;
-  message?: string;
-  data?: T;
-}
+import { PAYSTACK_API_URL, PaystackEnvelope } from '@src/common/types';
 
 export const toRefundStatus = (status: string): RefundStatus => {
   switch (status) {

@@ -20,6 +20,10 @@ export const WEBHOOKS_QUEUE = 'webhooks';
 /** Points one stored delivery at its endpoint URL (jobId `deliver-<deliveryId>`). */
 export const DELIVER_JOB = 'deliver';
 
+export const BILLING_QUEUE = 'billing';
+/** Daily: refreshes local plan prices/intervals from Paystack. */
+export const SYNC_PLANS_JOB = 'sync-plans';
+
 export const EMAILS_QUEUE = 'emails';
 /** One attempt at sending a stored email (jobId `email-<deliveryId>-<timestamp>`). */
 export const SEND_EMAIL_JOB = 'send-email';

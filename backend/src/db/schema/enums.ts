@@ -86,6 +86,29 @@ export const refundReasonEnum = pgEnum('refund_reason', [
   'duplicate_payment',
 ]);
 
+/** Public plans are Basic/Pro monthly/annual; Enterprise plans are private rows. */
+export const planTierEnum = pgEnum('plan_tier', ['basic', 'pro', 'enterprise']);
+
+/** Paystack plan intervals. Hourly exists for development renewal tests. */
+export const planIntervalEnum = pgEnum('plan_interval', [
+  'hourly',
+  'daily',
+  'weekly',
+  'monthly',
+  'annually',
+]);
+
+/**
+ * The org's billing relationship. `past_due` is the grace period after a failed renewal;
+ * `suspended` is live mode off after grace expires.
+ */
+export const subscriptionStatusEnum = pgEnum('subscription_status', [
+  'active',
+  'past_due',
+  'suspended',
+  'cancelled',
+]);
+
 export const emailTypeEnum = pgEnum('email_type', [
   'confirmation',
   'cancellation',

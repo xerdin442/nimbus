@@ -83,6 +83,21 @@ const paystackResponse = (
     });
   }
 
+  const plan = /^\/plan\/(.+)$/.exec(url.pathname);
+  if (method === 'GET' && plan) {
+    const planCode = decodeURIComponent(plan[1]);
+    return json(200, {
+      status: true,
+      data: {
+        name: planCode.replace(/_/g, ' '),
+        plan_code: planCode,
+        amount: 250_000,
+        interval: planCode.includes('annual') ? 'annually' : 'monthly',
+        currency: 'NGN',
+      },
+    });
+  }
+
   const verify = /^\/transaction\/verify\/(.+)$/.exec(url.pathname);
   if (verify) {
     const reference = decodeURIComponent(verify[1]);

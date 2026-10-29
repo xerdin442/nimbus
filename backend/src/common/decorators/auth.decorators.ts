@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '@src/common/guards/jwt-auth.guard';
 import { OrgMemberGuard } from '@src/common/guards/org-member.guard';
 import { RolesGuard } from '@src/common/guards/roles.guard';
 import { ApiKeyGuard } from '@src/common/guards/api-key.guard';
+import { ApiKeyRateLimitGuard } from '@src/common/guards/api-key-rate-limit.guard';
 import { OrgVerifiedGuard } from '@src/common/guards/org-verified.guard';
 import { Roles } from './roles.decorator';
 import type { Role } from '@src/db/schema/types';
@@ -13,4 +14,5 @@ export const Dashboard = (...roles: Role[]) =>
     Roles(...roles),
   );
 
-export const PublicApi = () => applyDecorators(UseGuards(ApiKeyGuard));
+export const PublicApi = () =>
+  applyDecorators(UseGuards(ApiKeyGuard, ApiKeyRateLimitGuard));

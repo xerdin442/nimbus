@@ -8,6 +8,8 @@ import {
   paymentMethodEnum,
   paymentProviderEnum,
   paymentStatusEnum,
+  planIntervalEnum,
+  planTierEnum,
   refundReasonEnum,
   refundStatusEnum,
   reservationChannelEnum,
@@ -16,6 +18,7 @@ import {
   seatTypeEnum,
   showtimeSeatStatusEnum,
   showtimeStatusEnum,
+  subscriptionStatusEnum,
   webhookDeliveryStatusEnum,
 } from './enums';
 import { organizations } from './organizations';
@@ -40,6 +43,13 @@ import { reservations, tickets } from './reservations';
 import { paymentEvents, payments } from './payments';
 import { idempotencyKeys } from './idempotency-keys';
 import { refunds } from './refunds';
+import { plans } from './plans';
+import {
+  billingEvents,
+  entitlementOverrides,
+  subscriptions,
+  usageCounters,
+} from './billing';
 
 // ── Enums ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -96,6 +106,15 @@ export type RefundStatus = (typeof REFUND_STATUSES)[number];
 
 export const REFUND_REASONS = refundReasonEnum.enumValues;
 export type RefundReason = (typeof REFUND_REASONS)[number];
+
+export const PLAN_TIERS = planTierEnum.enumValues;
+export type PlanTier = (typeof PLAN_TIERS)[number];
+
+export const PLAN_INTERVALS = planIntervalEnum.enumValues;
+export type PlanInterval = (typeof PLAN_INTERVALS)[number];
+
+export const SUBSCRIPTION_STATUSES = subscriptionStatusEnum.enumValues;
+export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number];
 
 /** Minor units per seat type. A showtime prices every seat type its layout uses. */
 export type SeatPrices = Partial<Record<SeatType, number>>;
@@ -155,3 +174,15 @@ export type IdempotencyKey = typeof idempotencyKeys.$inferSelect;
 export type Refund = typeof refunds.$inferSelect;
 
 export type PaymentEvent = typeof paymentEvents.$inferSelect;
+
+export type Plan = typeof plans.$inferSelect;
+export type NewPlan = typeof plans.$inferInsert;
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type NewSubscription = typeof subscriptions.$inferInsert;
+
+export type EntitlementOverride = typeof entitlementOverrides.$inferSelect;
+
+export type UsageCounter = typeof usageCounters.$inferSelect;
+
+export type BillingEvent = typeof billingEvents.$inferSelect;

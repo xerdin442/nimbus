@@ -22,6 +22,11 @@ const defaults: Record<string, string> = {
   RESEND_API_KEY: 're_e2e',
   PLATFORM_MAIL_FROM: 'Nimbus <no-reply@nimbus.test>',
   TICKET_SIGNING_SECRET: 'e2e-ticket-signing-secret',
+  PAYSTACK_BILLING_SECRET_KEY: 'sk_test_billing_good',
+  PAYSTACK_PLAN_BASIC_MONTHLY: 'PLN_basic_monthly_test',
+  PAYSTACK_PLAN_BASIC_ANNUAL: 'PLN_basic_annual_test',
+  PAYSTACK_PLAN_PRO_MONTHLY: 'PLN_pro_monthly_test',
+  PAYSTACK_PLAN_PRO_ANNUAL: 'PLN_pro_annual_test',
 };
 
 for (const [key, value] of Object.entries(defaults)) {

@@ -270,7 +270,12 @@ describe('RLS isolation (e2e)', () => {
      * Tables that deliberately have no RLS: read by auth code and guards before a tenant context
      * exists. Adding a table here is a reviewed decision; forgetting RLS on a new table fails below.
      */
-    const GLOBAL_TABLES = ['memberships', 'invitations', 'api_keys'];
+    const GLOBAL_TABLES = [
+      'memberships',
+      'invitations',
+      'api_keys',
+      'billing_events',
+    ];
 
     it('global tables are exactly the allowlisted ones', async () => {
       const result = await ownerPool.query<{ table_name: string }>(`

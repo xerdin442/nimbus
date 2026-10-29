@@ -12,6 +12,8 @@ export * from './reservations';
 export * from './payments';
 export * from './idempotency-keys';
 export * from './refunds';
+export * from './plans';
+export * from './billing';
 export * from './webhook-endpoints';
 export * from './webhook-deliveries';
 export * from './email-deliveries';
