@@ -9,6 +9,7 @@ import type {
   Invitation,
   MailConfig,
   Movie,
+  Organization,
   OrgSettings,
   PaymentConfig,
   Plan,
@@ -141,6 +142,11 @@ export interface MemberScope {
   role: Role;
   locationIds: string[];
 }
+
+export type OrgContact = Pick<
+  Organization,
+  'id' | 'name' | 'billingEmail' | 'notificationEmail'
+>;
 
 export type ApiKeyView = Omit<ApiKey, 'keyHash' | 'organizationId'>;
 
@@ -337,6 +343,12 @@ export interface PaystackEnvelope<T> {
   data?: T;
 }
 
+export interface PaystackInitializeData {
+  authorization_url: string;
+  access_code: string;
+  reference: string;
+}
+
 export interface CheckoutView {
   authorizationUrl: string;
   reference: string;
@@ -398,6 +410,7 @@ export type SubscriptionView = Pick<
   | 'currentPeriodEnd'
   | 'currentPeriodStart'
   | 'nextPaymentDate'
+  | 'graceEndsAt'
   | 'startedAt'
   | 'cancelAtPeriodEnd'
 > & {

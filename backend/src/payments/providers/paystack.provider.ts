@@ -2,7 +2,6 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { Injectable } from '@nestjs/common';
 import type { RefundStatus } from '@src/db/schema/types';
 import {
-  InitializedPayment,
   InitializePaymentInput,
   PaymentProvider,
   PaymentProviderError,
@@ -10,7 +9,12 @@ import {
   ProviderTransaction,
 } from './payment-provider.interface';
 import { REQUEST_TIMEOUT_MS } from '@src/common/util';
-import { PAYSTACK_API_URL, PaystackEnvelope } from '@src/common/types';
+import {
+  CheckoutView,
+  PAYSTACK_API_URL,
+  PaystackEnvelope,
+  PaystackInitializeData,
+} from '@src/common/types';
 
 export const toRefundStatus = (status: string): RefundStatus => {
   switch (status) {
@@ -34,18 +38,20 @@ export class PaystackProvider implements PaymentProvider {
   async initialize(
     secretKey: string,
     input: InitializePaymentInput,
-  ): Promise<InitializedPayment> {
-    const data = await this.request<{
-      authorization_url: string;
-      reference: string;
-    }>(secretKey, 'POST', '/transaction/initialize', {
-      email: input.email,
-      amount: input.amount,
-      currency: input.currency,
-      reference: input.reference,
-      callback_url: input.callbackUrl,
-      metadata: JSON.stringify(input.metadata),
-    });
+  ): Promise<CheckoutView> {
+    const data = await this.request<PaystackInitializeData>(
+      secretKey,
+      'POST',
+      '/transaction/initialize',
+      {
+        email: input.email,
+        amount: input.amount,
+        currency: input.currency,
+        reference: input.reference,
+        callback_url: input.callbackUrl,
+        metadata: JSON.stringify(input.metadata),
+      },
+    );
 
     return {
       authorizationUrl: data.authorization_url,

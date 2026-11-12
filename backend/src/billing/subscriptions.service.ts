@@ -38,6 +38,14 @@ export class SubscriptionsService {
   }
 
   async getCurrent(orgId: string): Promise<CurrentSubscription | null> {
+    return this.getLatest(orgId, true);
+  }
+
+  /** The newest subscription in any state, so billing can show suspended/cancelled history. */
+  async getLatest(
+    orgId: string,
+    activeOnly = false,
+  ): Promise<CurrentSubscription | null> {
     return this.db.withTenant({ orgId, livemode: true }, async (tx) => {
       const [row] = await tx
         .select({ subscription: subscriptions, plan: plans })
@@ -46,7 +54,9 @@ export class SubscriptionsService {
         .where(
           and(
             eq(subscriptions.organizationId, orgId),
-            inArray(subscriptions.status, ACTIVE_SUBSCRIPTION_STATUSES),
+            activeOnly
+              ? inArray(subscriptions.status, ACTIVE_SUBSCRIPTION_STATUSES)
+              : undefined,
           ),
         )
         .orderBy(desc(subscriptions.startedAt))

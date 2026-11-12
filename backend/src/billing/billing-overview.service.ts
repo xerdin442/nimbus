@@ -37,7 +37,7 @@ export class BillingOverviewService {
         .from(plans)
         .where(and(eq(plans.isPublic, true), eq(plans.isActive, true)))
         .orderBy(asc(plans.tier), asc(plans.interval)),
-      this.subscriptions.getCurrent(orgId),
+      this.subscriptions.getLatest(orgId),
       this.entitlements.getAll(orgId),
       this.db.client
         .select({ billingEmail: organizations.billingEmail })

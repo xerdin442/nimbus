@@ -24,12 +24,12 @@ export class PlanSyncService implements OnApplicationBootstrap {
   ) {}
 
   onApplicationBootstrap(): void {
-    void this.sync().catch((error: unknown) =>
+    void this.run().catch((error: unknown) =>
       this.logger.error(`Billing plan bootstrap sync failed: ${String(error)}`),
     );
   }
 
-  async sync(): Promise<void> {
+  async run(): Promise<void> {
     await this.db.client.transaction(async (tx) => {
       // Clear first so two plan codes swapped between environments don't trip the unique index.
       for (const { key } of PLAN_CODES) {

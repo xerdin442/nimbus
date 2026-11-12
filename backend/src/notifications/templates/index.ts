@@ -4,6 +4,7 @@ import { escapeHtml, layout } from './shared';
 export * from './shared';
 export * from './reservation';
 export * from './alerts';
+export * from './billing';
 
 export const invitationEmail = (input: {
   orgName: string;

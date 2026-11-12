@@ -35,6 +35,7 @@ export interface FakeTransaction {
   email: string;
   amount: number;
   currency: string;
+  plan?: string;
   callbackUrl: string;
   metadata: Record<string, unknown>;
 }
@@ -47,6 +48,8 @@ export interface FakePaystack {
   transactions: Map<string, FakeTransaction>;
   verifyStatus: Map<string, string>;
   refunds: { secretKey: string; reference: string }[];
+  disabledSubscriptions: { code: string; token: string }[];
+  manageEmails: string[];
   revokedKeys: Set<string>;
   /** Next refund call answers with this HTTP status instead of succeeding. */
   failNextRefund?: number;
@@ -70,6 +73,7 @@ const paystackResponse = (
       email: body.email as string,
       amount: body.amount as number,
       currency: body.currency as string,
+      plan: body.plan as string | undefined,
       callbackUrl: body.callback_url as string,
       metadata: JSON.parse(body.metadata as string) as Record<string, unknown>,
     });
@@ -80,6 +84,29 @@ const paystackResponse = (
         access_code: reference,
         reference,
       },
+    });
+  }
+
+  if (method === 'POST' && url.pathname === '/subscription/disable') {
+    paystack.disabledSubscriptions.push({
+      code: body.code as string,
+      token: body.token as string,
+    });
+    return json(200, { status: true, data: { status: 'success' } });
+  }
+
+  const manage = /^\/subscription\/([^/]+)\/manage\/(link|email)$/.exec(
+    url.pathname,
+  );
+  if (manage) {
+    const code = decodeURIComponent(manage[1]);
+    if (manage[2] === 'email') {
+      paystack.manageEmails.push(code);
+      return json(200, { status: true, data: {} });
+    }
+    return json(200, {
+      status: true,
+      data: { link: `https://paystack.com/manage/${code}` },
     });
   }
 
@@ -209,6 +236,8 @@ export function useE2eApp() {
     transactions: new Map(),
     verifyStatus: new Map(),
     refunds: [],
+    disabledSubscriptions: [],
+    manageEmails: [],
     revokedKeys: new Set(),
   };
   /** Every successful Brevo send (connection tests and org emails), in request order. */
@@ -363,7 +392,7 @@ export function useE2eApp() {
   /**
    * Runs the webhook-verification flow for `mode`: pays the verification payment the verify
    * endpoint starts and delivers its signed `charge.success` webhook, so the org's config ends
-   * webhook-verified (skipped when it already is — `started` is `already_verified` then).
+   * webhook-verified (skipped when it already is: `started` is `already_verified` then).
    */
   const verifyWebhook = async (
     session: Session,
@@ -423,6 +452,21 @@ export function useE2eApp() {
       .send(body);
   };
 
+  /** POST a platform billing webhook signed with the billing account's secret. */
+  const billingWebhook = (payload: Record<string, unknown>) => {
+    const body = JSON.stringify(payload);
+    return http()
+      .post('/api/webhooks/billing/paystack')
+      .set('content-type', 'application/json')
+      .set(
+        'x-paystack-signature',
+        createHmac('sha512', process.env.PAYSTACK_BILLING_SECRET_KEY!)
+          .update(body)
+          .digest('hex'),
+      )
+      .send(body);
+  };
+
   /** Creates an API key and returns the full key (shown once). */
   const createApiKey = async (
     session: Session,
@@ -455,6 +499,7 @@ export function useE2eApp() {
     connectPaystack,
     verifyWebhook,
     paystackWebhook,
+    billingWebhook,
     createApiKey,
     location,
   };

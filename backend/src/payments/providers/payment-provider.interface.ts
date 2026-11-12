@@ -1,3 +1,4 @@
+import { CheckoutView } from '@src/common/types';
 import type { RefundStatus } from '@src/db/schema/types';
 
 export interface InitializePaymentInput {
@@ -8,11 +9,6 @@ export interface InitializePaymentInput {
   reference: string;
   callbackUrl: string;
   metadata: Record<string, unknown>;
-}
-
-export interface InitializedPayment {
-  authorizationUrl: string;
-  reference: string;
 }
 
 export interface ProviderTransaction {
@@ -35,7 +31,7 @@ export interface PaymentProvider {
   initialize(
     secretKey: string,
     input: InitializePaymentInput,
-  ): Promise<InitializedPayment>;
+  ): Promise<CheckoutView>;
   verify(secretKey: string, reference: string): Promise<ProviderTransaction>;
   refund(secretKey: string, reference: string): Promise<ProviderRefund>;
   verifyWebhookSignature(

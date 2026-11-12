@@ -169,10 +169,7 @@ export class EntitlementsService {
     key: EntitlementKey,
     value: boolean | number,
   ): void {
-    if (typeof value !== typeof BASIC_ENTITLEMENTS[key]) {
-      return;
-    }
-
+    if (typeof value !== typeof BASIC_ENTITLEMENTS[key]) return;
     Object.assign(target, { [key]: value });
   }
 }

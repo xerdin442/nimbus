@@ -23,6 +23,10 @@ export const DELIVER_JOB = 'deliver';
 export const BILLING_QUEUE = 'billing';
 /** Daily: refreshes local plan prices/intervals from Paystack. */
 export const SYNC_PLANS_JOB = 'sync-plans';
+/** Handles one stored billing webhook (jobId `billing-event-<eventId>`). */
+export const PROCESS_BILLING_EVENT_JOB = 'process-billing-event';
+/** Suspends a past-due subscription when its grace period ends (jobId `suspend-<id>-<graceEndsAt>`). */
+export const SUSPEND_SUBSCRIPTION_JOB = 'suspend-subscription';
 
 export const EMAILS_QUEUE = 'emails';
 /** One attempt at sending a stored email (jobId `email-<deliveryId>-<timestamp>`). */

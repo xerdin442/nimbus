@@ -36,6 +36,10 @@ export class UpdateOrganizationDto {
   @IsOptional()
   @IsEmail()
   notificationEmail?: string;
+
+  @IsOptional()
+  @IsEmail()
+  billingEmail?: string;
 }
 
 export class UpdateOrgSettingsDto {

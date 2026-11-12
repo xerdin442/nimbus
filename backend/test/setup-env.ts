@@ -30,7 +30,7 @@ const defaults: Record<string, string> = {
 };
 
 for (const [key, value] of Object.entries(defaults)) {
-  process.env[key] ??= value;
+  process.env[key] = process.env[key] || value;
 }
 
 // Redis database 1, apart from development's database 0: a running dev server's BullMQ workers

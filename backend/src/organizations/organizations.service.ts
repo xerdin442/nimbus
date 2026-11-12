@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
 import {
@@ -13,6 +13,11 @@ import type {
   Transaction,
   VerificationChecklist,
 } from '@src/common/types';
+import {
+  CodedException,
+  isPgError,
+  PG_UNIQUE_VIOLATION,
+} from '@src/common/errors';
 import { randomAlphanumeric } from '@src/common/util';
 import {
   CreateOrganizationDto,
@@ -109,17 +114,40 @@ export class OrganizationsService {
     orgId: string,
     dto: UpdateOrganizationDto,
   ): Promise<Organization> {
-    const [org] = await this.db.client
-      .update(organizations)
-      .set({
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.notificationEmail !== undefined && {
-          notificationEmail: dto.notificationEmail.toLowerCase(),
-        }),
-      })
-      .where(eq(organizations.id, orgId))
-      .returning();
+    return this.write(orgId, dto);
+  }
 
-    return org;
+  /** Set by the owner before checkout; unique so Paystack customer email map to one org. */
+  async setBillingEmail(orgId: string, email: string): Promise<Organization> {
+    return this.write(orgId, { billingEmail: email });
+  }
+
+  private async write(
+    orgId: string,
+    values: Partial<
+      Pick<Organization, 'name' | 'notificationEmail' | 'billingEmail'>
+    >,
+  ): Promise<Organization> {
+    try {
+      const [org] = await this.db.client
+        .update(organizations)
+        .set({
+          ...values,
+          billingEmail: values.billingEmail?.toLowerCase(),
+          notificationEmail: values.notificationEmail?.toLowerCase(),
+        })
+        .where(eq(organizations.id, orgId))
+        .returning();
+      return org;
+    } catch (error) {
+      if (isPgError(error, PG_UNIQUE_VIOLATION)) {
+        throw new CodedException(
+          HttpStatus.CONFLICT,
+          'billing_email_taken',
+          'This billing email is already used by another organization',
+        );
+      }
+      throw error;
+    }
   }
 }

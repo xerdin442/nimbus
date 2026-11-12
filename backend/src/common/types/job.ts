@@ -34,6 +34,15 @@ export interface SendEmailJob extends BaseJob {
   deliveryId: string;
 }
 
+export interface ProcessBillingEventJob {
+  eventId: string;
+}
+
+export interface SuspendSubscriptionJob {
+  orgId: string;
+  subscriptionId: string;
+}
+
 export interface SendAlertJob {
   key: string;
   kind: OrgAlertKind;

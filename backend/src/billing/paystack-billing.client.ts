@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { Secrets } from '@src/common/secrets';
 import {
+  CheckoutView,
   PAYSTACK_API_URL,
   PaystackEnvelope,
+  PaystackInitializeData,
   PaystackPlan,
   SyncedPlan,
 } from '@src/common/types';
@@ -16,7 +19,90 @@ export class PaystackBillingClient {
     return Boolean(Secrets.PAYSTACK_BILLING_SECRET_KEY);
   }
 
+  verifyWebhookSignature(rawBody: Buffer, signature: string): boolean {
+    const secretKey = Secrets.PAYSTACK_BILLING_SECRET_KEY;
+    if (!secretKey || !signature) return false;
+
+    const expected = createHmac('sha512', secretKey).update(rawBody).digest();
+    const received = Buffer.from(signature, 'hex');
+
+    return (
+      expected.length === received.length && timingSafeEqual(expected, received)
+    );
+  }
+
+  async initialize(input: {
+    email: string;
+    planCode: string;
+    reference: string;
+    callbackUrl: string;
+    metadata: Record<string, unknown>;
+  }): Promise<CheckoutView> {
+    const data = await this.request<PaystackInitializeData>(
+      '/transaction/initialize',
+      {
+        method: 'POST',
+        body: {
+          email: input.email,
+          plan: input.planCode,
+          reference: input.reference,
+          callback_url: input.callbackUrl,
+          metadata: JSON.stringify(input.metadata),
+        },
+      },
+    );
+
+    return {
+      authorizationUrl: data.authorization_url,
+      reference: data.reference,
+    };
+  }
+
+  async disableSubscription(
+    subscriptionCode: string,
+    emailToken: string,
+  ): Promise<void> {
+    await this.request<unknown>('/subscription/disable', {
+      method: 'POST',
+      body: { code: subscriptionCode, token: emailToken },
+    });
+  }
+
+  async getManageLink(subscriptionCode: string): Promise<string> {
+    const data = await this.request<{
+      link: string;
+    }>(`/subscription/${encodeURIComponent(subscriptionCode)}/manage/link`, {
+      method: 'GET',
+    });
+    return data.link;
+  }
+
+  async sendManageEmail(subscriptionCode: string): Promise<void> {
+    await this.request<unknown>(
+      `/subscription/${encodeURIComponent(subscriptionCode)}/manage/email`,
+      { method: 'POST' },
+    );
+  }
+
   async getPlan(planCode: string): Promise<SyncedPlan> {
+    const data = await this.request<PaystackPlan>(
+      `/plan/${encodeURIComponent(planCode)}`,
+      { method: 'GET' },
+    );
+
+    return {
+      name: data.name,
+      planCode: data.plan_code,
+      amount: data.amount,
+      interval: data.interval,
+      currency: data.currency,
+    };
+  }
+
+  private async request<T>(
+    path: string,
+    init: { method: string; body?: Record<string, unknown> },
+  ): Promise<T> {
     const secretKey = Secrets.PAYSTACK_BILLING_SECRET_KEY;
     if (!secretKey) {
       throw new PaymentProviderError(
@@ -27,13 +113,15 @@ export class PaystackBillingClient {
 
     let response: Response;
     try {
-      response = await fetch(
-        `${PAYSTACK_API_URL}/plan/${encodeURIComponent(planCode)}`,
-        {
-          headers: { authorization: `Bearer ${secretKey}` },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      response = await fetch(`${PAYSTACK_API_URL}${path}`, {
+        method: init.method,
+        headers: {
+          authorization: `Bearer ${secretKey}`,
+          ...(init.body && { 'content-type': 'application/json' }),
         },
-      );
+        ...(init.body && { body: JSON.stringify(init.body) }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
     } catch (error) {
       throw new PaymentProviderError(
         'unavailable',
@@ -43,7 +131,7 @@ export class PaystackBillingClient {
 
     const envelope = (await response
       .json()
-      .catch(() => {})) as PaystackEnvelope<PaystackPlan>;
+      .catch(() => {})) as PaystackEnvelope<T>;
     const message =
       envelope.message ?? `Paystack returned HTTP ${response.status}`;
 
@@ -60,12 +148,6 @@ export class PaystackBillingClient {
       throw new PaymentProviderError('rejected', message);
     }
 
-    return {
-      name: envelope.data.name,
-      planCode: envelope.data.plan_code,
-      amount: envelope.data.amount,
-      interval: envelope.data.interval,
-      currency: envelope.data.currency,
-    };
+    return envelope.data;
   }
 }

@@ -45,6 +45,8 @@ export const subscriptions = pgTable(
     }),
     currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
     nextPaymentDate: timestamp('next_payment_date', { withTimezone: true }),
+    /** End of the 7-day recovery window after a failed renewal payment. */
+    graceEndsAt: timestamp('grace_ends_at', { withTimezone: true }),
     cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
     startedAt: timestamp('started_at', { withTimezone: true })
       .notNull()
