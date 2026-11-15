@@ -34,9 +34,11 @@ import type {
   ReservationSummary,
   ReservationView,
   TenantContext,
+  TicketUsage,
   TicketView,
   Transaction,
 } from '@src/common/types';
+import { UsageService } from '@src/billing/usage.service';
 import type { ReservationEvent } from '@src/common/types/events';
 import type {
   ExpireReservationJob,
@@ -79,6 +81,7 @@ export class ReservationsService {
     private readonly tickets: TicketsService,
     private readonly payments: PaymentsService,
     private readonly settings: OrgSettingsService,
+    private readonly usage: UsageService,
     private readonly events: EventEmitter2,
     @InjectQueue(RESERVATIONS_QUEUE) private readonly queue: Queue,
   ) {}
@@ -91,6 +94,8 @@ export class ReservationsService {
     const view = await this.db.withTenant(ctx, async (tx) => {
       const showtime = await this.showtimes.loadForBooking(tx, dto.showtimeId);
       this.showtimes.assertBookable(showtime, 'start'); // Online reservations must be made before the showtime starts
+
+      await this.usage.assertWithinQuota(tx, ctx, dto.seatIds.length);
 
       const { holdMinutes } = await this.settings.read(tx);
       const expiresAt = new Date(Date.now() + holdMinutes * MINUTE_MS);
@@ -182,7 +187,7 @@ export class ReservationsService {
     userId: string,
     dto: BoxOfficeSaleDto,
   ): Promise<ReservationView> {
-    return this.db.withTenant(ctx, async (tx) => {
+    const { view, usage } = await this.db.withTenant(ctx, async (tx) => {
       const showtime = await this.showtimes.loadForBooking(tx, dto.showtimeId);
       assertLocationAccess(membership, showtime.locationId);
 
@@ -222,9 +227,15 @@ export class ReservationsService {
         .where(eq(reservations.id, priced.id))
         .returning();
       const tickets = await this.tickets.issue(tx, ctx, confirmed.id, claimed);
+      const usage = await this.usage.record(tx, ctx, claimed.length);
 
-      return this.toView(confirmed, seats, tickets, null);
+      return { view: this.toView(confirmed, seats, tickets, null), usage };
     });
+
+    if (usage) {
+      await this.usage.evaluateAlerts(ctx, usage);
+    }
+    return view;
   }
 
   async get(
@@ -424,6 +435,7 @@ export class ReservationsService {
     reservationId: string,
     paymentId: string,
   ): Promise<void> {
+    let usage: TicketUsage | null = null;
     const settlement = await this.db.withTenant(
       ctx,
       async (tx): Promise<PaymentSettlement> => {
@@ -487,12 +499,16 @@ export class ReservationsService {
           })
           .where(eq(reservations.id, reservation.id));
         await this.tickets.issue(tx, ctx, reservation.id, claimed);
+        usage = await this.usage.record(tx, ctx, claimed.length);
         return 'confirmed';
       },
     );
 
     switch (settlement) {
       case 'confirmed':
+        if (usage) {
+          await this.usage.evaluateAlerts(ctx, usage);
+        }
         await this.emit(RESERVATION_CONFIRMED, ctx, reservationId);
         break;
       case 'conflict':

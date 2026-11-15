@@ -86,6 +86,7 @@ describe('Billing (e2e)', () => {
       subscriptionCode: `sub_${n}`,
       emailToken: `tok_${n}`,
       customerCode: `cus_${n}`,
+      authorizationCode: `auth_${n}`,
     };
   };
 
@@ -98,6 +99,7 @@ describe('Billing (e2e)', () => {
     plan: { plan_code: checkout.planCode },
     subscription_code: provider.subscriptionCode,
     email_token: provider.emailToken,
+    authorization: { authorization_code: provider.authorizationCode },
     metadata: { orgId, planId: checkout.planId },
   });
 
@@ -194,6 +196,12 @@ describe('Billing (e2e)', () => {
       staff: { members: 1, pendingInvites: 0 },
       liveApiKeys: 0,
       liveWebhookEndpoints: 0,
+      tickets: {
+        used: 0,
+        limit: 5_000,
+        hardStop: 5_400,
+        periodStart: expect.any(String) as string,
+      },
     });
   });
 
@@ -224,6 +232,7 @@ describe('Billing (e2e)', () => {
   it('enforces the plan rate limit per live API key', async () => {
     const session = await signup();
     await verify(session);
+    await subscribe(session.orgId);
     const key = await createApiKey(session, 'secret', 'live');
 
     await setOverride(session.orgId, 'api.rate_limit_per_sec', 1);
@@ -237,7 +246,7 @@ describe('Billing (e2e)', () => {
       `delete from entitlement_overrides where organization_id = $1 and key = 'api.rate_limit_per_sec'`,
       [session.orgId],
     );
-    await subscribe(session.orgId);
+    await clearBillingCaches(session.orgId);
 
     await api('get', '/locations', key).expect(200);
   });
@@ -543,6 +552,145 @@ describe('Billing (e2e)', () => {
       expect(overview.body.data.subscription.status).toBe('active');
       expect(overview.body.data.entitlements['locations.max']).toBe(10);
     });
+  });
+
+  it('upgrades to a higher plan and disables the superseded subscription', async () => {
+    const session = await signup();
+    const active = await activate(session, 'basic_monthly');
+    const pro = await planDetails('pro_monthly');
+
+    const res = await dash('post', '/billing/upgrade', session)
+      .send({ planId: pro.id })
+      .expect(201);
+    const checkout = {
+      planId: pro.id,
+      planCode: pro.plan_code,
+      email: active.checkout.email,
+      reference: res.body.data.reference as string,
+      authorizationUrl: res.body.data.authorizationUrl as string,
+    };
+    const provider = {
+      ...active.provider,
+      subscriptionCode: `sub_up_${seq()}`,
+      emailToken: `tok_up_${seq()}`,
+    };
+
+    await billingWebhook(
+      chargeEvent(checkout, provider, session.orgId, checkout.reference),
+    ).expect(200);
+    await billingWebhook(
+      subscriptionCreateEvent(checkout, provider, session.orgId, futureDate()),
+    ).expect(200);
+
+    await eventually(async () => {
+      const overview = await dash('get', '/billing', session).expect(200);
+      expect(overview.body.data.subscription.plan.key).toBe('pro_monthly');
+      expect(overview.body.data.entitlements['locations.max']).toBe(10);
+    });
+    expect(paystack.disabledSubscriptions.map((s) => s.code)).toContain(
+      active.provider.subscriptionCode,
+    );
+  });
+
+  it('blocks a downgrade until usage fits, then schedules it at period end', async () => {
+    const session = await signup();
+    const active = await activate(session, 'pro_monthly');
+    const basic = await planDetails('basic_monthly');
+
+    const locationIds: string[] = [];
+    for (let i = 1; i <= 4; i++) {
+      const created = await dash('post', '/locations', session, 'test')
+        .send(location(`Location ${i}`))
+        .expect(201);
+      locationIds.push(created.body.data.id as string);
+    }
+
+    const blocked = await dash('post', '/billing/downgrade', session)
+      .send({ planId: basic.id })
+      .expect(409);
+    expect(blocked.body.error.code).toBe('downgrade_blocked');
+    expect(blocked.body.error.details.violations).toContainEqual(
+      expect.objectContaining({
+        key: 'locations.max',
+        limit: 3,
+        current: 4,
+      }),
+    );
+
+    await dash('post', `/locations/${locationIds[0]}/archive`, session).expect(
+      200,
+    );
+
+    const scheduled = await dash('post', '/billing/downgrade', session)
+      .send({ planId: basic.id })
+      .expect(201);
+    expect(scheduled.body.data.pendingPlanId).toBe(basic.id);
+    expect(paystack.scheduledSubscriptions).toContainEqual(
+      expect.objectContaining({
+        customer: active.provider.customerCode,
+        plan: basic.plan_code,
+        authorization: active.provider.authorizationCode,
+      }),
+    );
+    expect(paystack.disabledSubscriptions.map((s) => s.code)).toContain(
+      active.provider.subscriptionCode,
+    );
+
+    const overlooking = await dash('get', '/billing', session).expect(200);
+    expect(overlooking.body.data.subscription.pendingPlanId).toBe(basic.id);
+    expect(overlooking.body.data.entitlements['locations.max']).toBe(3);
+
+    // On the switch date Paystack starts the target subscription.
+    await billingWebhook({
+      event: 'subscription.create',
+      data: {
+        id: `subevt_${seq()}`,
+        customer: {
+          email: active.checkout.email,
+          customer_code: active.provider.customerCode,
+        },
+        plan: { plan_code: basic.plan_code },
+        subscription_code: `sub_down_${seq()}`,
+        email_token: `tok_down_${seq()}`,
+        authorization: {
+          authorization_code: active.provider.authorizationCode,
+        },
+        status: 'active',
+        created_at: new Date().toISOString(),
+        next_payment_date: futureDate().toISOString(),
+      },
+    }).expect(200);
+
+    await eventually(async () => {
+      const after = await dash('get', '/billing', session).expect(200);
+      expect(after.body.data.subscription.plan.key).toBe('basic_monthly');
+      expect(after.body.data.subscription.pendingPlanId).toBeNull();
+    });
+  });
+
+  it('blocks live API use and new live keys without an active subscription', async () => {
+    const session = await signup();
+    await verify(session);
+    await subscribe(session.orgId);
+    const liveKey = await createApiKey(session, 'secret', 'live');
+
+    await ctx.ownerPool.query(
+      'delete from subscriptions where organization_id = $1',
+      [session.orgId],
+    );
+    await clearBillingCaches(session.orgId);
+
+    const blocked = await api('get', '/locations', liveKey).expect(402);
+    expect(blocked.body.error.code).toBe('subscription_inactive');
+
+    const key = await dash('post', '/api-keys', session, 'live')
+      .send({ type: 'secret' })
+      .expect(402);
+    expect(key.body.error.code).toBe('subscription_inactive');
+
+    // Test mode is never billing-gated.
+    const testKey = await createApiKey(session, 'secret', 'test');
+    await api('get', '/locations', testKey).expect(200);
   });
 
   it('rejects invalid billing webhook signatures and duplicate billing emails', async () => {

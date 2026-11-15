@@ -413,6 +413,7 @@ export type SubscriptionView = Pick<
   | 'graceEndsAt'
   | 'startedAt'
   | 'cancelAtPeriodEnd'
+  | 'pendingPlanId'
 > & {
   plan: PlanView;
 };
@@ -420,6 +421,15 @@ export type SubscriptionView = Pick<
 export const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'past_due'] as const;
 export type ActiveSubscriptionStatus =
   (typeof ACTIVE_SUBSCRIPTION_STATUSES)[number];
+
+/** Live tickets counted in the subscription-anchored usage month. */
+export type TicketUsage = {
+  used: number;
+  limit: number;
+  /** `limit × (1 + tickets.hard_stop_pct)`; new live reservations are refused above it. */
+  hardStop: number;
+  periodStart: Date;
+};
 
 export type PlanUsage = {
   locations: number;
@@ -430,6 +440,7 @@ export type PlanUsage = {
   };
   liveApiKeys: number;
   liveWebhookEndpoints: number;
+  tickets: TicketUsage;
 };
 
 export type BillingOverview = {

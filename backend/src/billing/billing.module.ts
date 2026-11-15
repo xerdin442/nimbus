@@ -13,6 +13,7 @@ import { PaystackBillingClient } from './paystack-billing.client';
 import { BillingProcessor } from './billing.processor';
 import { PlanSyncService } from './plan-sync.service';
 import { SubscriptionsService } from './subscriptions.service';
+import { UsageService } from './usage.service';
 
 @Global()
 @Module({
@@ -30,8 +31,9 @@ import { SubscriptionsService } from './subscriptions.service';
     BillingWebhooksService,
     SubscriptionsService,
     BillingOverviewService,
+    UsageService,
   ],
-  exports: [PaystackBillingClient, SubscriptionsService],
+  exports: [PaystackBillingClient, SubscriptionsService, UsageService],
 })
 export class BillingModule implements OnModuleInit {
   constructor(@InjectQueue(BILLING_QUEUE) private readonly queue: Queue) {}

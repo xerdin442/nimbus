@@ -141,6 +141,13 @@
       "when": 1793350573544,
       "tag": "0019_billing_grace",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794607965433,
+      "tag": "0020_subscription_authorization",
+      "breakpoints": true
     }
   ]
 }

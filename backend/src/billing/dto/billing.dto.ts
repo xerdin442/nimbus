@@ -8,3 +8,12 @@ export class SubscribeDto {
   @IsEmail()
   billingEmail?: string;
 }
+
+export class ChangePlanDto {
+  @IsUUID()
+  planId: string;
+
+  @IsOptional()
+  @IsEmail()
+  billingEmail?: string;
+}

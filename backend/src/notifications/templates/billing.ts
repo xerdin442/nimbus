@@ -98,3 +98,31 @@ export const subscriptionCancellationScheduledEmail = (input: {
   ),
   text: `The ${input.planName} subscription for ${input.orgName} will not renew. You can keep using it until ${date(input.accessUntil)}. After that, the organization moves to Basic unless you subscribe again.`,
 });
+
+export const ticketUsageWarningEmail = (input: {
+  orgName: string;
+  used: number;
+  limit: number;
+  billingUrl: string;
+}): RenderedEmail => ({
+  subject: `Nimbus: ${input.orgName} is close to its ticket limit`,
+  html: layout(
+    `<p><strong>${escapeHtml(input.orgName)}</strong> has sold <strong>${input.used}</strong> of its <strong>${input.limit}</strong> monthly live tickets.</p>
+     <p>Ticket sales continue, but upgrading your plan raises the limit. <a href="${escapeHtml(input.billingUrl)}">Review your plan</a></p>`,
+  ),
+  text: `${input.orgName} has sold ${input.used} of its ${input.limit} monthly live tickets. Ticket sales continue, but upgrading your plan raises the limit.\n\nReview your plan: ${input.billingUrl}`,
+});
+
+export const ticketUsageOverEmail = (input: {
+  orgName: string;
+  used: number;
+  limit: number;
+  billingUrl: string;
+}): RenderedEmail => ({
+  subject: `Nimbus: ${input.orgName} has reached its ticket limit`,
+  html: layout(
+    `<p><strong>${escapeHtml(input.orgName)}</strong> has sold <strong>${input.used}</strong> live tickets this month against a plan limit of <strong>${input.limit}</strong>.</p>
+     <p>Sales continue until the hard stop. <a href="${escapeHtml(input.billingUrl)}">Upgrade your plan</a> to keep selling.</p>`,
+  ),
+  text: `${input.orgName} has sold ${input.used} live tickets this month against a plan limit of ${input.limit}. Sales continue until the hard stop.\n\nUpgrade your plan: ${input.billingUrl}`,
+});

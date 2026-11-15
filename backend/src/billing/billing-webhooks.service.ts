@@ -299,6 +299,15 @@ export class BillingWebhooksService {
     }
 
     const existing = await this.findSubscription(orgId, data);
+    const incomingCode = subscriptionCodeOf(data);
+
+    if (existing && this.isStaleCreate(existing, data, plan)) {
+      this.logger.warn(
+        `Ignored late subscription.create ${incomingCode} for org ${orgId}`,
+      );
+      return;
+    }
+
     const state = this.subscriptionState(
       data.status ?? data.subscription?.status,
     );
@@ -314,11 +323,15 @@ export class BillingWebhooksService {
       providerCustomerCode:
         data.customer?.customer_code ?? existing?.providerCustomerCode ?? null,
       providerSubscriptionCode:
-        subscriptionCodeOf(data) ?? existing?.providerSubscriptionCode ?? null,
+        incomingCode ?? existing?.providerSubscriptionCode ?? null,
       providerEmailToken:
         data.email_token ??
         data.subscription?.email_token ??
         existing?.providerEmailToken ??
+        null,
+      authorizationCode:
+        data.authorization?.authorization_code ??
+        existing?.authorizationCode ??
         null,
       currentPeriodStart:
         toDate(data.created_at) ??
@@ -329,9 +342,24 @@ export class BillingWebhooksService {
       nextPaymentDate,
       graceEndsAt,
       cancelAtPeriodEnd: state.cancelAtPeriodEnd,
-      ...(state.status === 'active' ? { suspendedAt: null } : {}),
+      // A new subscription is authoritative: any scheduled downgrade is superseded.
+      pendingPlanId: null,
+      ...(state.status === 'active'
+        ? { suspendedAt: null, cancelledAt: null }
+        : {}),
       ...(state.status === 'cancelled' ? { cancelledAt: new Date() } : {}),
     };
+
+    const supersededCode =
+      existing &&
+      incomingCode &&
+      existing.providerSubscriptionCode &&
+      incomingCode !== existing.providerSubscriptionCode
+        ? existing.providerSubscriptionCode
+        : null;
+    const supersededToken = supersededCode
+      ? existing!.providerEmailToken
+      : null;
 
     if (existing) {
       await this.db.withTenant({ orgId, livemode: true }, (tx) =>
@@ -340,6 +368,9 @@ export class BillingWebhooksService {
           .set({ ...values, planId: plan.id, status: state.status })
           .where(eq(subscriptions.id, existing.id)),
       );
+      if (supersededCode && supersededToken) {
+        await this.disableSuperseded(supersededCode, supersededToken);
+      }
       if (state.status === 'past_due') {
         await this.scheduleSuspension(orgId, {
           ...existing,
@@ -371,6 +402,14 @@ export class BillingWebhooksService {
     data: PaystackBillingEventData,
   ): Promise<void> {
     const existing = await this.findSubscription(orgId, data);
+    if (
+      existing &&
+      !data.metadata?.planId &&
+      this.isSuperseded(existing, data)
+    ) {
+      return;
+    }
+
     const plan =
       (await this.findPlan(data)) ??
       (existing ? await this.planById(existing.planId) : null);
@@ -386,12 +425,17 @@ export class BillingWebhooksService {
     const values: Partial<NewSubscription> = {
       providerCustomerCode:
         data.customer?.customer_code ?? existing?.providerCustomerCode ?? null,
+      // subscription.create is authoritative; a charge must not overwrite the linked code.
       providerSubscriptionCode:
-        subscriptionCodeOf(data) ?? existing?.providerSubscriptionCode ?? null,
+        existing?.providerSubscriptionCode ?? subscriptionCodeOf(data) ?? null,
       providerEmailToken:
+        existing?.providerEmailToken ??
         data.email_token ??
         data.subscription?.email_token ??
-        existing?.providerEmailToken ??
+        null,
+      authorizationCode:
+        existing?.authorizationCode ??
+        data.authorization?.authorization_code ??
         null,
       currentPeriodStart: paidAt,
       currentPeriodEnd: nextPaymentDate ?? existing?.currentPeriodEnd ?? null,
@@ -443,7 +487,7 @@ export class BillingWebhooksService {
     data: PaystackBillingEventData,
   ): Promise<void> {
     const existing = await this.findSubscription(orgId, data);
-    if (!existing) return;
+    if (!existing || this.isSuperseded(existing, data)) return;
 
     const nextPaymentDate = toDate(
       data.next_payment_date ?? data.subscription?.next_payment_date,
@@ -485,7 +529,13 @@ export class BillingWebhooksService {
     data: PaystackBillingEventData,
   ): Promise<void> {
     const existing = await this.findSubscription(orgId, data);
-    if (!existing || existing.status === 'cancelled') return;
+    if (
+      !existing ||
+      existing.status === 'cancelled' ||
+      this.isSuperseded(existing, data)
+    ) {
+      return;
+    }
 
     const wasPastDue = existing.status === 'past_due';
     const graceEndsAt =
@@ -518,7 +568,13 @@ export class BillingWebhooksService {
     data: PaystackBillingEventData,
   ): Promise<void> {
     const existing = await this.findSubscription(orgId, data);
-    if (!existing || existing.status === 'cancelled') return;
+    if (
+      !existing ||
+      existing.status === 'cancelled' ||
+      this.isSuperseded(existing, data)
+    ) {
+      return;
+    }
 
     await this.db.withTenant({ orgId, livemode: true }, (tx) =>
       tx
@@ -543,7 +599,7 @@ export class BillingWebhooksService {
     data: PaystackBillingEventData,
   ): Promise<void> {
     const existing = await this.findSubscription(orgId, data);
-    if (!existing) return;
+    if (!existing || this.isSuperseded(existing, data)) return;
 
     await this.db.withTenant({ orgId, livemode: true }, (tx) =>
       tx
@@ -553,6 +609,7 @@ export class BillingWebhooksService {
           cancelAtPeriodEnd: false,
           cancelledAt: new Date(),
           graceEndsAt: null,
+          pendingPlanId: null,
         })
         .where(eq(subscriptions.id, existing.id)),
     );
@@ -594,6 +651,46 @@ export class BillingWebhooksService {
       removeOnComplete: true,
       removeOnFail: 1000,
     });
+  }
+
+  /**
+   * True for a subscription.create from a subscription that was replaced (e.g. the old
+   * subscription's event arriving after an upgrade). Checkouts carry `metadata.planId`
+   * and a scheduled downgrade matches `pendingPlanId`, so both are processed normally.
+   */
+  private isStaleCreate(
+    existing: Subscription,
+    data: PaystackBillingEventData,
+    incomingPlan: Plan,
+  ): boolean {
+    if (data.metadata?.planId) return false;
+    if (existing.pendingPlanId === incomingPlan.id) return false;
+    return this.isSuperseded(existing, data);
+  }
+
+  private isSuperseded(
+    existing: Subscription,
+    data: PaystackBillingEventData,
+  ): boolean {
+    const code = subscriptionCodeOf(data);
+    return Boolean(
+      code &&
+      existing.providerSubscriptionCode &&
+      code !== existing.providerSubscriptionCode,
+    );
+  }
+
+  private async disableSuperseded(
+    subscriptionCode: string,
+    emailToken: string,
+  ): Promise<void> {
+    try {
+      await this.client.disableSubscription(subscriptionCode, emailToken);
+    } catch (error) {
+      this.logger.warn(
+        `Could not disable superseded subscription ${subscriptionCode}: ${String(error)}`,
+      );
+    }
   }
 
   private async findSubscription(

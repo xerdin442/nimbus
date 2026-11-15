@@ -6,6 +6,8 @@ import type { App } from 'supertest/types';
 import { Pool } from 'pg';
 import { AppModule } from '@src/app.module';
 import { configureApp } from '@src/app.setup';
+import { SubscriptionsService } from '@src/billing/subscriptions.service';
+import { EntitlementsService } from '@src/entitlements/entitlements.service';
 import { PlatformMailService } from '@src/notifications/platform-mail.service';
 import { createOwnerPool, resetTestDatabase } from './test-db';
 
@@ -50,6 +52,12 @@ export interface FakePaystack {
   refunds: { secretKey: string; reference: string }[];
   disabledSubscriptions: { code: string; token: string }[];
   manageEmails: string[];
+  scheduledSubscriptions: {
+    customer: string;
+    plan: string;
+    authorization?: string;
+    startDate?: string;
+  }[];
   revokedKeys: Set<string>;
   /** Next refund call answers with this HTTP status instead of succeeding. */
   failNextRefund?: number;
@@ -107,6 +115,22 @@ const paystackResponse = (
     return json(200, {
       status: true,
       data: { link: `https://paystack.com/manage/${code}` },
+    });
+  }
+
+  if (method === 'POST' && url.pathname === '/subscription') {
+    paystack.scheduledSubscriptions.push({
+      customer: body.customer as string,
+      plan: body.plan as string,
+      authorization: body.authorization as string | undefined,
+      startDate: body.start_date as string | undefined,
+    });
+    return json(200, {
+      status: true,
+      data: {
+        subscription_code: `sub_scheduled_${String(body.plan)}`,
+        status: 'active',
+      },
     });
   }
 
@@ -238,6 +262,7 @@ export function useE2eApp() {
     refunds: [],
     disabledSubscriptions: [],
     manageEmails: [],
+    scheduledSubscriptions: [],
     revokedKeys: new Set(),
   };
   /** Every successful Brevo send (connection tests and org emails), in request order. */
@@ -467,6 +492,21 @@ export function useE2eApp() {
       .send(body);
   };
 
+  /** Inserts an active subscription so live mode is usable (default: Pro monthly). */
+  const subscribe = async (session: Session, key = 'pro_monthly') => {
+    const plan = await ctx.ownerPool.query<{ id: string }>(
+      'select id from plans where key = $1',
+      [key],
+    );
+    await ctx.ownerPool.query(
+      `insert into subscriptions (organization_id, plan_id, status, started_at)
+       values ($1, $2, 'active', now())`,
+      [session.orgId, plan.rows[0].id],
+    );
+    await ctx.app.get(EntitlementsService).clear(session.orgId);
+    await ctx.app.get(SubscriptionsService).clear(session.orgId);
+  };
+
   /** Creates an API key and returns the full key (shown once). */
   const createApiKey = async (
     session: Session,
@@ -500,6 +540,7 @@ export function useE2eApp() {
     verifyWebhook,
     paystackWebhook,
     billingWebhook,
+    subscribe,
     createApiKey,
     location,
   };

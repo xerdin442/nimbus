@@ -16,6 +16,7 @@ import {
   CurrentUser,
 } from '@src/common/decorators/request.decorators';
 import { VerifiedOrgForLive } from '@src/common/decorators/verified-org.decorator';
+import { RequiresSubscription } from '@src/common/decorators/requires-subscription.decorator';
 import type {
   AuthenticatedUser,
   MembershipContext,
@@ -46,6 +47,7 @@ export class DashboardReservationsController {
   @Post('box-office')
   @Dashboard()
   @VerifiedOrgForLive()
+  @RequiresSubscription()
   sell(
     @CurrentTenant() tenant: TenantContext,
     @CurrentMembership() membership: MembershipContext,

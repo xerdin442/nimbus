@@ -35,8 +35,10 @@ export class EntitlementsService {
 
   /**
    * Effective entitlements: the subscribed plan's defaults, then per-org overrides.
-   * Unsubscribed orgs get Basic. Cached for 60s so direct plan/override edits take effect
-   * without a restart; billing webhooks clear it immediately.
+   * Unsubscribed orgs get Basic. While a downgrade is scheduled, numeric limits are lowered
+   * to the target plan's so the org can't grow back over them before the switch.
+   * Cached for 60s so direct plan/override edits take effect without a restart; billing
+   * webhooks clear it immediately.
    */
   async getAll(orgId: string): Promise<Entitlements> {
     const cacheKey = this.cacheKey(orgId);
@@ -54,7 +56,10 @@ export class EntitlementsService {
       { orgId, livemode: true },
       async (tx) => {
         const [subscription] = await tx
-          .select({ planId: subscriptions.planId })
+          .select({
+            planId: subscriptions.planId,
+            pendingPlanId: subscriptions.pendingPlanId,
+          })
           .from(subscriptions)
           .where(
             and(
@@ -65,19 +70,6 @@ export class EntitlementsService {
           .orderBy(desc(subscriptions.startedAt))
           .limit(1);
 
-        const entitlements = this.fromPlan(BASIC_ENTITLEMENTS);
-        if (subscription) {
-          const [plan] = await tx
-            .select({ entitlements: plans.entitlements })
-            .from(plans)
-            .where(eq(plans.id, subscription.planId))
-            .limit(1);
-
-          if (plan) {
-            this.merge(entitlements, plan.entitlements);
-          }
-        }
-
         const overrides = await tx
           .select({
             key: entitlementOverrides.key,
@@ -86,8 +78,17 @@ export class EntitlementsService {
           .from(entitlementOverrides)
           .where(eq(entitlementOverrides.organizationId, orgId));
 
-        for (const override of overrides) {
-          this.mergeKey(entitlements, override.key, override.value);
+        const currentPlan = subscription
+          ? await this.planEntitlements(tx, subscription.planId)
+          : null;
+        const entitlements = this.effective(currentPlan, overrides);
+
+        if (subscription?.pendingPlanId) {
+          const pending = await this.planEntitlements(
+            tx,
+            subscription.pendingPlanId,
+          );
+          this.lowerNumeric(entitlements, this.effective(pending, overrides));
         }
 
         return entitlements;
@@ -98,6 +99,21 @@ export class EntitlementsService {
       expiration: { type: 'EX', value: ENTITLEMENTS_CACHE_TTL_SECONDS },
     });
     return effective;
+  }
+
+  /** Effective entitlements for an arbitrary plan, used to check a downgrade before it starts. */
+  async forPlan(orgId: string, planId: string): Promise<Entitlements> {
+    return this.db.withTenant({ orgId, livemode: true }, async (tx) => {
+      const overrides = await tx
+        .select({
+          key: entitlementOverrides.key,
+          value: entitlementOverrides.value,
+        })
+        .from(entitlementOverrides)
+        .where(eq(entitlementOverrides.organizationId, orgId));
+
+      return this.effective(await this.planEntitlements(tx, planId), overrides);
+    });
   }
 
   async get<K extends EntitlementKey>(
@@ -142,6 +158,43 @@ export class EntitlementsService {
         `Your plan allows ${limit} for ${key}`,
         { key, limit, current },
       );
+    }
+  }
+
+  private async planEntitlements(
+    tx: Transaction,
+    planId: string,
+  ): Promise<Partial<Entitlements> | null> {
+    const [plan] = await tx
+      .select({ entitlements: plans.entitlements })
+      .from(plans)
+      .where(eq(plans.id, planId))
+      .limit(1);
+    return plan?.entitlements ?? null;
+  }
+
+  private effective(
+    plan: Partial<Entitlements> | null,
+    overrides: { key: EntitlementKey; value: boolean | number }[],
+  ): Entitlements {
+    const entitlements = this.fromPlan(BASIC_ENTITLEMENTS);
+    if (plan) {
+      this.merge(entitlements, plan);
+    }
+    for (const override of overrides) {
+      this.mergeKey(entitlements, override.key, override.value);
+    }
+    return entitlements;
+  }
+
+  /** A scheduled downgrade caps numeric limits at the target plan until it takes effect. */
+  private lowerNumeric(target: Entitlements, pending: Entitlements): void {
+    for (const key of ENTITLEMENT_KEYS) {
+      if (typeof target[key] === 'number' && typeof pending[key] === 'number') {
+        Object.assign(target, {
+          [key]: Math.min(target[key], pending[key]),
+        });
+      }
     }
   }
 

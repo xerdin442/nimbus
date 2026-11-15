@@ -17,6 +17,7 @@ describe('Webhook verification (e2e)', () => {
     connectPaystack,
     verifyWebhook,
     paystackWebhook,
+    subscribe,
     createApiKey,
   } = useE2eApp();
 
@@ -159,6 +160,7 @@ describe('Webhook verification (e2e)', () => {
     it('verifies each mode through its own webhook URL, and only its own', async () => {
       const { owner, testKey } = await setup();
       await verify(owner);
+      await subscribe(owner);
       const liveKey = `sk_live_${seq()}good`;
       await connectPaystack(owner, 'live', liveKey);
       await createApiKey(owner, 'secret', 'live');

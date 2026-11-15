@@ -11,7 +11,7 @@ import { CurrentMembership } from '@src/common/decorators/request.decorators';
 import type { MembershipContext } from '@src/common/types';
 import { BillingOverviewService } from '../../billing-overview.service';
 import { BillingService } from '../../billing.service';
-import { SubscribeDto } from '../../dto/billing.dto';
+import { ChangePlanDto, SubscribeDto } from '../../dto/billing.dto';
 
 @Dashboard('owner')
 @Controller('dashboard/billing')
@@ -32,6 +32,22 @@ export class BillingController {
     @Body() dto: SubscribeDto,
   ) {
     return this.billing.subscribe(membership.orgId, dto);
+  }
+
+  @Post('upgrade')
+  upgrade(
+    @CurrentMembership() membership: MembershipContext,
+    @Body() dto: ChangePlanDto,
+  ) {
+    return this.billing.upgrade(membership.orgId, dto);
+  }
+
+  @Post('downgrade')
+  downgrade(
+    @CurrentMembership() membership: MembershipContext,
+    @Body() dto: ChangePlanDto,
+  ) {
+    return this.billing.downgrade(membership.orgId, dto);
   }
 
   @Post('cancel')

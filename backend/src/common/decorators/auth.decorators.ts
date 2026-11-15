@@ -5,14 +5,30 @@ import { RolesGuard } from '@src/common/guards/roles.guard';
 import { ApiKeyGuard } from '@src/common/guards/api-key.guard';
 import { ApiKeyRateLimitGuard } from '@src/common/guards/api-key-rate-limit.guard';
 import { OrgVerifiedGuard } from '@src/common/guards/org-verified.guard';
+import { SubscriptionActiveGuard } from '@src/common/guards/subscription-active.guard';
+import { FeatureGuard } from '@src/common/guards/feature.guard';
 import { Roles } from './roles.decorator';
+import { RequiresSubscription } from './requires-subscription.decorator';
 import type { Role } from '@src/db/schema/types';
 
 export const Dashboard = (...roles: Role[]) =>
   applyDecorators(
-    UseGuards(JwtAuthGuard, OrgMemberGuard, RolesGuard, OrgVerifiedGuard),
+    UseGuards(
+      JwtAuthGuard,
+      OrgMemberGuard,
+      RolesGuard,
+      OrgVerifiedGuard,
+      SubscriptionActiveGuard,
+      FeatureGuard,
+    ),
     Roles(...roles),
   );
 
+/**
+ * Public API routes need an active subscription in live mode; test mode is never billing-gated.
+ */
 export const PublicApi = () =>
-  applyDecorators(UseGuards(ApiKeyGuard, ApiKeyRateLimitGuard));
+  applyDecorators(
+    UseGuards(ApiKeyGuard, ApiKeyRateLimitGuard, SubscriptionActiveGuard),
+    RequiresSubscription(),
+  );

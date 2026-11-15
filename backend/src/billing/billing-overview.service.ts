@@ -12,8 +12,10 @@ import {
   webhookEndpoints,
 } from '@src/db/schema';
 import type { Plan } from '@src/db/schema/types';
+import type { Entitlements } from '@src/common/types';
 import { EntitlementsService } from '@src/entitlements/entitlements.service';
 import { SubscriptionsService } from './subscriptions.service';
+import { UsageService } from './usage.service';
 import {
   BillingOverview,
   CurrentSubscription,
@@ -28,6 +30,7 @@ export class BillingOverviewService {
     private readonly db: DbService,
     private readonly entitlements: EntitlementsService,
     private readonly subscriptions: SubscriptionsService,
+    private readonly usageService: UsageService,
   ) {}
 
   async get(orgId: string): Promise<BillingOverview> {
@@ -50,12 +53,13 @@ export class BillingOverviewService {
       plans: publicPlans.map((plan) => this.planView(plan)),
       subscription: current ? this.subscriptionView(current) : null,
       entitlements,
-      usage: await this.usage(orgId),
+      usage: await this.usage(orgId, entitlements, current?.startedAt ?? null),
       billingEmail: org?.billingEmail ?? null,
     };
   }
 
-  private async usage(orgId: string): Promise<PlanUsage> {
+  /** Resource counts used by the billing page and the downgrade pre-check. */
+  async counts(orgId: string): Promise<Omit<PlanUsage, 'tickets'>> {
     return this.db.withTenant({ orgId, livemode: true }, async (tx) => {
       const [
         [locationsCount],
@@ -115,6 +119,18 @@ export class BillingOverviewService {
         liveWebhookEndpoints: hooks.total,
       };
     });
+  }
+
+  private async usage(
+    orgId: string,
+    entitlements: Entitlements,
+    startedAt: Date | null,
+  ): Promise<PlanUsage> {
+    const [counts, tickets] = await Promise.all([
+      this.counts(orgId),
+      this.usageService.summary(orgId, entitlements, startedAt),
+    ]);
+    return { ...counts, tickets };
   }
 
   private planView(row: Plan): PlanView {

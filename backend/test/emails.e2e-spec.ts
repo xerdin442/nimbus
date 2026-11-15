@@ -24,6 +24,7 @@ describe('Customer emails (e2e)', () => {
     connectPaystack,
     verifyWebhook,
     paystackWebhook,
+    subscribe,
     createApiKey,
     location,
   } = useE2eApp();
@@ -91,6 +92,10 @@ describe('Customer emails (e2e)', () => {
     await dash('post', `/showtimes/${showtimeId}/publish`, owner, mode).expect(
       200,
     );
+
+    if (mode === 'live') {
+      await subscribe(owner);
+    }
 
     return {
       owner,

@@ -15,6 +15,7 @@ import {
   CurrentUser,
 } from '@src/common/decorators/request.decorators';
 import { VerifiedOrgForLive } from '@src/common/decorators/verified-org.decorator';
+import { RequiresSubscription } from '@src/common/decorators/requires-subscription.decorator';
 import type { TenantContext } from '@src/common/types';
 import { ApiKeysService } from './api-keys.service';
 import { CreateApiKeyDto } from './dto/api-key.dto';
@@ -31,6 +32,7 @@ export class ApiKeysController {
 
   @Post()
   @VerifiedOrgForLive()
+  @RequiresSubscription()
   create(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: { id: string },
@@ -42,6 +44,7 @@ export class ApiKeysController {
   @Post(':id/roll')
   @HttpCode(HttpStatus.OK)
   @VerifiedOrgForLive()
+  @RequiresSubscription()
   roll(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: { id: string },

@@ -68,6 +68,24 @@ export class PaystackBillingClient {
     });
   }
 
+  /** Schedules a plan switch (downgrade) for `startDate` using the customer's saved authorization. */
+  async createSubscription(input: {
+    customer: string;
+    planCode: string;
+    authorization?: string | null;
+    startDate: Date;
+  }): Promise<void> {
+    await this.request<unknown>('/subscription', {
+      method: 'POST',
+      body: {
+        customer: input.customer,
+        plan: input.planCode,
+        ...(input.authorization && { authorization: input.authorization }),
+        start_date: input.startDate.toISOString(),
+      },
+    });
+  }
+
   async getManageLink(subscriptionCode: string): Promise<string> {
     const data = await this.request<{
       link: string;

@@ -10,6 +10,9 @@ export interface PaystackBillingEventData {
   subscription_code?: string;
   email_token?: string;
   invoice_code?: string;
+  authorization?: {
+    authorization_code?: string;
+  };
   customer?: {
     email?: string;
     customer_code?: string;

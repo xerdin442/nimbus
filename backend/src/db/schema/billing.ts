@@ -39,6 +39,8 @@ export const subscriptions = pgTable(
     providerSubscriptionCode: text('provider_subscription_code').unique(),
     /** Paystack's email token, needed to disable the subscription. */
     providerEmailToken: text('provider_email_token'),
+    /** Paystack authorization code, needed to schedule a downgrade on the same card. */
+    authorizationCode: text('authorization_code'),
     status: subscriptionStatusEnum('status').notNull(),
     currentPeriodStart: timestamp('current_period_start', {
       withTimezone: true,

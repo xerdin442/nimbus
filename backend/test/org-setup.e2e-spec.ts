@@ -13,6 +13,7 @@ describe('Org setup (e2e)', () => {
     inviteToken,
     joinAs,
     verify,
+    subscribe,
     location,
   } = useE2eApp();
 
@@ -967,7 +968,7 @@ describe('Org setup (e2e)', () => {
   });
 
   describe('API keys and the public API', () => {
-    it('creates test keys any time, but live keys only for a verified org', async () => {
+    it('creates test keys any time, but live keys only for a verified, subscribed org', async () => {
       const session = await signup();
 
       const testKey = await dash('post', '/api-keys', session, 'test')
@@ -981,6 +982,7 @@ describe('Org setup (e2e)', () => {
       expect(denied.body.error.code).toBe('org_not_verified');
 
       await verify(session);
+      await subscribe(session);
       const liveKey = await dash('post', '/api-keys', session, 'live')
         .send({ type: 'publishable' })
         .expect(201);
@@ -995,6 +997,7 @@ describe('Org setup (e2e)', () => {
     it('limits live keys to the plan (Basic: 2); rolling a key does not count as a new one', async () => {
       const session = await signup();
       await verify(session);
+      await subscribe(session, 'basic_monthly');
 
       const first = await dash('post', '/api-keys', session, 'live')
         .send({ type: 'publishable' })
