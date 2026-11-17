@@ -15,17 +15,24 @@ import {
   CurrentMembership,
   CurrentTenant,
 } from '@src/common/decorators/request.decorators';
+import { RequiresFeature } from '@src/common/decorators/requires-feature.decorator';
 import type { MembershipContext, TenantContext } from '@src/common/types';
 import { MoviesService } from '../../movies.service';
+import { TmdbProvider } from '../../providers/tmdb.provider';
 import {
   CreateMovieDto,
+  ImportTmdbMovieDto,
   ListMoviesQueryDto,
+  SearchTmdbQueryDto,
   UpdateMovieDto,
 } from '../../dto/movie.dto';
 
 @Controller('dashboard/movies')
 export class DashboardMoviesController {
-  constructor(private readonly movies: MoviesService) {}
+  constructor(
+    private readonly movies: MoviesService,
+    private readonly tmdb: TmdbProvider,
+  ) {}
 
   @Get()
   @Dashboard()
@@ -40,6 +47,23 @@ export class DashboardMoviesController {
   @Dashboard('owner', 'manager')
   create(@CurrentTenant() tenant: TenantContext, @Body() dto: CreateMovieDto) {
     return this.movies.create(tenant, dto);
+  }
+
+  @Get('import/tmdb')
+  @Dashboard('owner', 'manager')
+  @RequiresFeature('tmdb_import')
+  searchTmdb(@Query() query: SearchTmdbQueryDto) {
+    return this.tmdb.search(query.query);
+  }
+
+  @Post('import/tmdb')
+  @Dashboard('owner', 'manager')
+  @RequiresFeature('tmdb_import')
+  importTmdb(
+    @CurrentTenant() tenant: TenantContext,
+    @Body() dto: ImportTmdbMovieDto,
+  ) {
+    return this.movies.importFromTmdb(tenant, dto.tmdbId);
   }
 
   @Get(':id')

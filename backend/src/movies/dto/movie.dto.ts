@@ -1,4 +1,5 @@
 import { IntersectionType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -104,4 +105,18 @@ export class UpdateMovieDto {
   @IsOptional()
   @IsUrl({ protocols: ['https'], require_protocol: true })
   trailerUrl?: string;
+}
+
+export class SearchTmdbQueryDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  query: string;
+}
+
+export class ImportTmdbMovieDto {
+  @Type(() => Number)
+  @IsInt()
+  @IsPositive()
+  tmdbId: number;
 }

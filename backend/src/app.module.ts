@@ -10,6 +10,7 @@ import { DashboardModeMiddleware } from './common/middleware/dashboard-mode.midd
 import { applyThrottlerConfig } from './common/util';
 import { REDIS_CLIENT, RedisModule } from './common/cache';
 import { HelpersModule } from './common/helpers';
+import { UploadsModule } from './common/uploads/uploads.module';
 import { DbModule } from './db/db.module';
 import { EntitlementsModule } from './entitlements/entitlements.module';
 import { BillingModule } from './billing/billing.module';
@@ -25,6 +26,7 @@ import { ShowtimesModule } from './showtimes/showtimes.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     DbModule,
     RedisModule,
     HelpersModule,
+    UploadsModule,
     EntitlementsModule,
     BillingModule,
     AuthModule,
@@ -53,6 +56,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     TicketsModule,
     ReservationsModule,
     WebhooksModule,
+    ReportsModule,
   ],
 
   providers: [

@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, text } from 'drizzle-orm/pg-core';
 import { id, timestamps } from './columns';
 import { organizationId } from './organizations';
 
@@ -7,6 +7,14 @@ export const DEFAULT_ORG_SETTINGS = {
   cleanupMinutes: 15,
   holdMinutes: 10,
   sendTestEmailsToMe: false,
+  companyLogo: null,
+  companyLogoPublicId: null,
+  emailHeaderImage: null,
+  emailHeaderImagePublicId: null,
+  tiktok: null,
+  instagram: null,
+  facebook: null,
+  twitter: null,
 } as const;
 
 /** Scheduling and booking settings, one row per org, created on first update. */
@@ -32,5 +40,13 @@ export const orgSettings = pgTable('org_settings', {
   sendTestEmailsToMe: boolean('send_test_emails_to_me')
     .notNull()
     .default(false),
+  companyLogo: text('company_logo'),
+  companyLogoPublicId: text('company_logo_public_id'),
+  emailHeaderImage: text('email_header_image'),
+  emailHeaderImagePublicId: text('email_header_image_public_id'),
+  tiktok: text('tiktok'),
+  instagram: text('instagram'),
+  facebook: text('facebook'),
+  twitter: text('twitter'),
   ...timestamps,
 });

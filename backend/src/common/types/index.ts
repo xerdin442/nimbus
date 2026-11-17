@@ -46,6 +46,8 @@ export const SUPPORTED_CURRENCIES = [
 
 export type Currency = (typeof SUPPORTED_CURRENCIES)[number];
 
+export type Asset = 'logo' | 'header';
+
 export interface PaginatedResult<T> {
   data: T[];
   meta: {
@@ -226,8 +228,34 @@ export type TestModeLimitKey = keyof typeof TEST_MODE_LIMITS;
 
 export type OrgSettingsView = Pick<
   OrgSettings,
-  'adsMinutes' | 'cleanupMinutes' | 'holdMinutes' | 'sendTestEmailsToMe'
+  | 'adsMinutes'
+  | 'cleanupMinutes'
+  | 'holdMinutes'
+  | 'sendTestEmailsToMe'
+  | 'companyLogo'
+  | 'emailHeaderImage'
+  | 'tiktok'
+  | 'instagram'
+  | 'facebook'
+  | 'twitter'
 >;
+
+export type OrgSettingsInternal = Pick<
+  OrgSettings,
+  'companyLogoPublicId' | 'emailHeaderImagePublicId'
+> &
+  OrgSettingsView;
+
+export type EmailBranding = {
+  logoUrl: string | null;
+  headerImageUrl: string | null;
+  socials: {
+    tiktok: string | null;
+    instagram: string | null;
+    facebook: string | null;
+    twitter: string | null;
+  };
+};
 
 export interface SeatCounts {
   available: number;
@@ -465,4 +493,60 @@ export interface SyncedPlan {
   amount: number;
   interval: string;
   currency: string;
+}
+
+export type ReportTotals = {
+  reservations: number;
+  ticketsSold: number;
+  revenue: number;
+  refunds: number;
+  netRevenue: number;
+  seatsSold: number;
+  capacity: number;
+  occupancyPct: number;
+  currency: string;
+};
+
+export type ReportDay = {
+  date: string;
+  reservations: number;
+  ticketsSold: number;
+  revenue: number;
+  refunds: number;
+  netRevenue: number;
+};
+
+export type TopMovieReport = {
+  movieId: string;
+  title: string;
+  ticketsSold: number;
+  revenue: number;
+};
+
+export type ShowtimeReport = {
+  showtimeId: string;
+  startsAt: Date;
+  movieId: string;
+  movieTitle: string;
+  screenName: string;
+  capacity: number;
+  seatsSold: number;
+  occupancyPct: number;
+  reservations: number;
+  ticketsSold: number;
+  revenue: number;
+  refunds: number;
+  netRevenue: number;
+};
+
+export type ReportSummary = {
+  location: { id: string; name: string; timezone: string };
+  range: { startDate: string; endDate: string };
+  totals: ReportTotals;
+  byDay: ReportDay[];
+  topMovies: TopMovieReport[];
+};
+
+export interface LoadedReport extends ReportSummary {
+  rows: ShowtimeReport[];
 }

@@ -8,6 +8,7 @@ import { AppModule } from '@src/app.module';
 import { configureApp } from '@src/app.setup';
 import { SubscriptionsService } from '@src/billing/subscriptions.service';
 import { EntitlementsService } from '@src/entitlements/entitlements.service';
+import { CloudinaryService } from '@src/common/uploads/cloudinary.service';
 import { PlatformMailService } from '@src/notifications/platform-mail.service';
 import { createOwnerPool, resetTestDatabase } from './test-db';
 
@@ -227,6 +228,46 @@ const fakeFetch =
         ? json(401, { message: 'Key not found' })
         : json(201, { messageId: '<msg@brevo>' });
     }
+    if (url.startsWith('https://api.themoviedb.org/3/')) {
+      const parsed = new URL(url);
+      if (parsed.pathname === '/3/search/movie') {
+        return json(200, {
+          results: [
+            {
+              id: 550,
+              title: 'Fight Club',
+              release_date: '1999-10-15',
+              overview: 'An insomniac office worker...',
+              poster_path: '/fight-club.jpg',
+            },
+            {
+              id: 551,
+              title: 'Fight Club 2',
+              release_date: '2001-01-01',
+              overview: null,
+              poster_path: null,
+            },
+          ],
+        });
+      }
+      const movie = /^\/3\/movie\/(\d+)$/.exec(parsed.pathname);
+      if (movie) {
+        const id = Number(movie[1]);
+        return json(200, {
+          id,
+          title: id === 550 ? 'Fight Club' : `TMDB Movie ${id}`,
+          overview: 'An insomniac office worker and a soap salesman...',
+          runtime: 139,
+          original_language: 'en',
+          genres: [{ name: 'Drama' }, { name: 'Thriller' }],
+          poster_path: '/fight-club.jpg',
+          videos: {
+            results: [{ site: 'YouTube', type: 'Trailer', key: 'dQw4w9WgXcQ' }],
+          },
+        });
+      }
+      return json(404, { status_code: 34, status_message: 'Not found' });
+    }
     return realFetch(input, init);
   };
 
@@ -267,6 +308,18 @@ export function useE2eApp() {
   };
   /** Every successful Brevo send (connection tests and org emails), in request order. */
   const brevoSends: { apiKey: string; body: Record<string, unknown> }[] = [];
+  /** Cloudinary calls made through the real service, recorded by the spy installed in beforeAll. */
+  const cloudinary: {
+    uploads: {
+      folder: string;
+      name: string;
+      publicId: string;
+      url: string;
+      size: number;
+    }[];
+    deleted: string[];
+  } = { uploads: [], deleted: [] };
+  let uploadedAssets = 0;
   const fake = fakeFetch(realFetch, paystack, brevoSends);
 
   /** Set in `beforeAll`; read them inside tests and hooks only. */
@@ -297,6 +350,25 @@ export function useE2eApp() {
     await ctx.app.listen(0, '127.0.0.1');
 
     ctx.platformMail = jest.spyOn(ctx.app.get(PlatformMailService), 'send');
+
+    const uploads = ctx.app.get(CloudinaryService);
+    jest
+      .spyOn(uploads, 'uploadImage')
+      .mockImplementation(async (buffer, input) => {
+        const publicId = `${input.folder}/${input.name}-${++uploadedAssets}`;
+        const url = `https://res.cloudinary.com/nimbus-test/image/upload/${publicId}.png`;
+        cloudinary.uploads.push({
+          folder: input.folder,
+          name: input.name,
+          publicId,
+          url,
+          size: buffer.length,
+        });
+        return { url, publicId };
+      });
+    jest.spyOn(uploads, 'destroy').mockImplementation(async (publicId) => {
+      cloudinary.deleted.push(publicId);
+    });
   });
 
   // jest's resetMocks clears the implementation before every test.
@@ -527,6 +599,7 @@ export function useE2eApp() {
   return {
     ctx,
     paystack,
+    cloudinary,
     brevoSends,
     http,
     seq,

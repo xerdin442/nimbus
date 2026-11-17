@@ -1,5 +1,5 @@
 import type { RefundReason } from '@src/db/schema/types';
-import type { RenderedEmail } from '@src/common/types';
+import type { EmailBranding, RenderedEmail } from '@src/common/types';
 import { escapeHtml, formatMoney, layout } from './shared';
 
 export interface ReservationEmailInput {
@@ -16,6 +16,7 @@ export interface ReservationEmailInput {
   total: number;
   currency: string;
   refund?: { amount: number; currency: string; reason: RefundReason } | null;
+  branding?: EmailBranding | null;
 }
 
 export const formatShowtime = (startsAt: Date, timezone: string): string =>
@@ -56,17 +57,21 @@ const showtimeLine = (input: ReservationEmailInput): string =>
 const greeting = (input: ReservationEmailInput): string =>
   input.customerName ? `Hi ${escapeHtml(input.customerName)},` : 'Hello,';
 
+const brandedLayout = (body: string, input: ReservationEmailInput): string =>
+  layout(body, { orgName: input.orgName, branding: input.branding });
+
 export const confirmationEmail = (
   input: ReservationEmailInput,
 ): RenderedEmail => ({
   subject: `${input.orgName}: Your tickets for ${input.movieTitle}`,
-  html: layout(
+  html: brandedLayout(
     `<p>${greeting(input)}</p>
      <p>Your booking is confirmed &mdash; your tickets are attached as QR codes, one image per ticket.</p>
      <p>${showtimeLine(input)}</p>
      <ul>${ticketList(input)}</ul>
      <p>Reservation code: <strong>${escapeHtml(input.code)}</strong> &mdash; total ${escapeHtml(formatMoney(input.total, input.currency))}.</p>
      <p>Show the QR images at the door. If scanning fails, staff can type in the ticket codes above.</p>`,
+    input,
   ),
   text: `${greeting(input)}\n\nYour booking is confirmed — your tickets are attached as QR codes, one image per ticket.\n\n${input.movieTitle} at ${formatShowtime(input.startsAt, input.timezone)}\n${input.screenName}, ${input.locationName}\n\n${input.tickets
     .map((ticket) => `Seat ${seatLabel(ticket)} — code ${ticket.code}`)
@@ -79,11 +84,12 @@ export const cancellationEmail = (
   input: ReservationEmailInput,
 ): RenderedEmail => ({
   subject: `${input.orgName}: Your reservation was cancelled`,
-  html: layout(
+  html: brandedLayout(
     `<p>${greeting(input)}</p>
      <p>Your reservation for the showtime below was cancelled and the seats were released.</p>
      <p>${showtimeLine(input)}</p>
      <p>Reservation code: <strong>${escapeHtml(input.code)}</strong></p>`,
+    input,
   ),
   text: `${greeting(input)}\n\nYour reservation for the showtime below was cancelled and the seats were released.\n\n${input.movieTitle} at ${formatShowtime(input.startsAt, input.timezone)}\n${input.screenName}, ${input.locationName}\n\nReservation code: ${input.code}`,
 });
@@ -93,13 +99,14 @@ export const refundEmail = (input: ReservationEmailInput): RenderedEmail => {
   const reason = REFUND_REASONS[refund.reason];
   return {
     subject: `${input.orgName}: Refund for ${input.movieTitle}`,
-    html: layout(
+    html: brandedLayout(
       `<p>${greeting(input)}</p>
        <p>Your reservation was refunded because ${escapeHtml(reason)}. ${escapeHtml(
          formatMoney(refund.amount, refund.currency),
        )} will be returned via your original payment method; banks can take a few days to process it.</p>
        <p>${showtimeLine(input)}</p>
        <p>Reservation code: <strong>${escapeHtml(input.code)}</strong></p>`,
+      input,
     ),
     text: `${greeting(input)}\n\nYour reservation was refunded because ${reason}. ${formatMoney(refund.amount, refund.currency)} will be returned via your original payment method; banks can take a few days to process it.\n\n${input.movieTitle} at ${formatShowtime(input.startsAt, input.timezone)}\n${input.screenName}, ${input.locationName}\n\nReservation code: ${input.code}`,
   };

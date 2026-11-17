@@ -20,6 +20,10 @@ jest.mock('@src/common/secrets', () => ({
     RESEND_API_KEY: 're_test_key',
     PLATFORM_MAIL_FROM: 'Nimbus <no-reply@nimbus.test>',
     TICKET_SIGNING_SECRET: 'test-ticket-signing-secret',
+    CLOUDINARY_CLOUD_NAME: 'nimbus-test',
+    CLOUDINARY_API_KEY: 'cloudinary-test-key',
+    CLOUDINARY_API_SECRET: 'cloudinary-test-secret',
+    TMDB_API_KEY: 'tmdb-test-key',
   },
 }));
 

@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, HttpStatus } from '@nestjs/common';
 import { and, count, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { DbService } from '@src/db/db.service';
 import { movies } from '@src/db/schema';
 import type { Movie } from '@src/db/schema/types';
+import { CodedException } from '@src/common/errors';
 import type {
   MembershipContext,
   PaginatedResult,
@@ -14,10 +15,14 @@ import {
   ListMoviesQueryDto,
   UpdateMovieDto,
 } from './dto/movie.dto';
+import { TmdbProvider } from './providers/tmdb.provider';
 
 @Injectable()
 export class MoviesService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly tmdb: TmdbProvider,
+  ) {}
 
   async list(
     ctx: TenantContext,
@@ -77,6 +82,38 @@ export class MoviesService {
         .returning(),
     );
     return movie;
+  }
+
+  async importFromTmdb(ctx: TenantContext, tmdbId: number): Promise<Movie> {
+    const details = await this.tmdb.details(tmdbId);
+
+    return this.db.withTenant(ctx, async (tx) => {
+      const [existing] = await tx
+        .select({ id: movies.id })
+        .from(movies)
+        .where(
+          and(eq(movies.tmdbId, tmdbId), eq(movies.livemode, ctx.livemode)),
+        )
+        .limit(1);
+      if (existing) {
+        throw new CodedException(
+          HttpStatus.CONFLICT,
+          'movie_already_imported',
+          'This movie was already imported',
+          { movieId: existing.id },
+        );
+      }
+
+      const [movie] = await tx
+        .insert(movies)
+        .values({
+          organizationId: ctx.orgId,
+          livemode: ctx.livemode,
+          ...details,
+        })
+        .returning();
+      return movie;
+    });
   }
 
   async update(

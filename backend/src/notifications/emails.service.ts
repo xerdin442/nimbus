@@ -31,6 +31,7 @@ import {
 } from '@src/common/types/constants';
 import type { SendAlertJob, SendEmailJob } from '@src/common/types/job';
 import type {
+  EmailBranding,
   EmailDeliveryView,
   OrgAlertKind,
   PaginatedResult,
@@ -77,9 +78,31 @@ import {
   cancellationEmail,
   confirmationEmail,
   refundEmail,
+  textFooter,
   type ReservationEmailInput,
 } from './templates';
 import { Secrets } from '@src/common/secrets';
+import { CloudinaryService } from '@src/common/uploads/cloudinary.service';
+import { EntitlementsService } from '@src/entitlements/entitlements.service';
+
+type BrandingSource = {
+  companyLogo: string | null;
+  companyLogoPublicId: string | null;
+  emailHeaderImage: string | null;
+  emailHeaderImagePublicId: string | null;
+  tiktok: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  twitter: string | null;
+};
+
+type RenderInput = ReservationEmailInput & {
+  status: Reservation['status'];
+  endsAt: Date;
+  customerEmail: string | null;
+  tickets: (ReservationEmailInput['tickets'][number] & { id: string })[];
+  brandingSource: BrandingSource;
+};
 
 /** Rows the dashboard retry button works for; the other reasons a retry can't fix. */
 const RETRYABLE_REASONS: EmailFailureReason[] = [
@@ -113,6 +136,8 @@ export class EmailsService {
     private readonly providers: MailProviderFactory,
     private readonly mailConfig: MailConfigService,
     private readonly platformMail: PlatformMailService,
+    private readonly entitlements: EntitlementsService,
+    private readonly cloudinary: CloudinaryService,
     @Inject(REDIS_CLIENT) private readonly redis: RedisClientType,
     @InjectQueue(EMAILS_QUEUE) private readonly queue: Queue,
   ) {}
@@ -202,7 +227,7 @@ export class EmailsService {
       throw new UnrecoverableError('Email provider is broken');
     }
 
-    const rendered = this.renderTemplate(delivery.type, input);
+    const rendered = await this.render(ctx, delivery.type, input);
     const attachments =
       delivery.type === 'confirmation'
         ? await this.qrAttachments(ctx, input.tickets)
@@ -311,7 +336,7 @@ export class EmailsService {
     if (!input) {
       throw new NotFoundException('Email not found');
     }
-    return this.renderTemplate(delivery.type, input);
+    return this.render(ctx, delivery.type, input);
   }
 
   async retry(
@@ -514,15 +539,7 @@ export class EmailsService {
   private async renderInput(
     ctx: TenantContext,
     reservationId: string,
-  ): Promise<
-    | (ReservationEmailInput & {
-        status: Reservation['status'];
-        endsAt: Date;
-        customerEmail: string | null;
-        tickets: (ReservationEmailInput['tickets'][number] & { id: string })[];
-      })
-    | null
-  > {
+  ): Promise<RenderInput | null> {
     return this.db.withTenant(ctx, async (tx) => {
       const [row] = await tx
         .select({
@@ -534,6 +551,14 @@ export class EmailsService {
           locationName: locations.name,
           timezone: locations.timezone,
           orgName: organizations.name,
+          companyLogo: orgSettings.companyLogo,
+          companyLogoPublicId: orgSettings.companyLogoPublicId,
+          emailHeaderImage: orgSettings.emailHeaderImage,
+          emailHeaderImagePublicId: orgSettings.emailHeaderImagePublicId,
+          tiktok: orgSettings.tiktok,
+          instagram: orgSettings.instagram,
+          facebook: orgSettings.facebook,
+          twitter: orgSettings.twitter,
         })
         .from(reservations)
         .innerJoin(showtimes, eq(showtimes.id, reservations.showtimeId))
@@ -543,6 +568,10 @@ export class EmailsService {
         .innerJoin(
           organizations,
           eq(organizations.id, reservations.organizationId),
+        )
+        .leftJoin(
+          orgSettings,
+          eq(orgSettings.organizationId, reservations.organizationId),
         )
         .where(eq(reservations.id, reservationId));
       if (!row) return null;
@@ -601,6 +630,7 @@ export class EmailsService {
         total: row.reservation.total,
         currency: row.reservation.currency,
         refund,
+        brandingSource: { ...row },
       };
     });
   }
@@ -619,6 +649,50 @@ export class EmailsService {
       case 'refund':
         return input.status === 'refunded';
     }
+  }
+
+  private async render(
+    ctx: TenantContext,
+    type: EmailType,
+    input: RenderInput,
+  ): Promise<RenderedEmail> {
+    const branding = await this.brandingFor(ctx, input.brandingSource);
+    const rendered = this.renderTemplate(type, { ...input, branding });
+    return branding
+      ? {
+          ...rendered,
+          text: `${rendered.text}${textFooter(branding, input.orgName)}`,
+        }
+      : rendered;
+  }
+
+  private async brandingFor(
+    ctx: TenantContext,
+    source: BrandingSource,
+  ): Promise<EmailBranding | null> {
+    if (!(await this.entitlements.get(ctx.orgId, 'email.branding'))) {
+      return null;
+    }
+
+    const logoUrl = source.companyLogoPublicId
+      ? this.cloudinary.imageUrl(source.companyLogoPublicId, 200)
+      : source.companyLogo;
+    const headerImageUrl = source.emailHeaderImagePublicId
+      ? this.cloudinary.imageUrl(source.emailHeaderImagePublicId, 1200)
+      : source.emailHeaderImage;
+    const socials = {
+      tiktok: source.tiktok,
+      instagram: source.instagram,
+      facebook: source.facebook,
+      twitter: source.twitter,
+    };
+
+    // Nothing configured: keep the plain layout instead of adding an empty branded shell.
+    if (!logoUrl && !headerImageUrl && !Object.values(socials).some(Boolean)) {
+      return null;
+    }
+
+    return { logoUrl, headerImageUrl, socials };
   }
 
   private renderTemplate(

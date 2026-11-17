@@ -5,11 +5,17 @@ import { OrganizationsService } from './organizations.service';
 import { MembersController } from './controllers/members.controller';
 import { MembersService } from './members.service';
 import { OrgSettingsService } from './org-settings.service';
+import { BrandingService } from './branding.service';
 
 @Module({
   imports: [NotificationsModule],
   controllers: [OrganizationsController, MembersController],
-  providers: [OrganizationsService, MembersService, OrgSettingsService],
+  providers: [
+    OrganizationsService,
+    MembersService,
+    OrgSettingsService,
+    BrandingService,
+  ],
   exports: [OrganizationsService, MembersService, OrgSettingsService],
 })
 export class OrganizationsModule {}

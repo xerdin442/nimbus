@@ -181,6 +181,12 @@ describe('Booking (e2e)', () => {
         cleanupMinutes: 15,
         holdMinutes: 10,
         sendTestEmailsToMe: false,
+        companyLogo: null,
+        emailHeaderImage: null,
+        tiktok: null,
+        instagram: null,
+        facebook: null,
+        twitter: null,
       });
 
       const saved = await dash('get', '/organization/settings', cinema.owner);
@@ -189,6 +195,12 @@ describe('Booking (e2e)', () => {
         cleanupMinutes: 10,
         holdMinutes: 10,
         sendTestEmailsToMe: false,
+        companyLogo: null,
+        emailHeaderImage: null,
+        tiktok: null,
+        instagram: null,
+        facebook: null,
+        twitter: null,
       });
 
       await dash('patch', '/organization/settings', cinema.owner)
